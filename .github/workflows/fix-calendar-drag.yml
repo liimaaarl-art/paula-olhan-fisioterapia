@@ -1,0 +1,28 @@
+name: Fix calendar drag
+on:
+  push:
+    paths:
+      - 'scripts/fix_calendar_drag.py'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply calendar drag fix
+        run: python scripts/fix_calendar_drag.py
+      - name: Verify fix
+        run: |
+          grep -q "window.dropAppointmentToDay=function" index.html
+          grep -q "dropAppointmentToDay" index.html
+      - name: Commit corrected index
+        run: |
+          git config user.name 'Florindo Sistemas Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix calendar drag for multiple patients per day' || exit 0
+          git push
