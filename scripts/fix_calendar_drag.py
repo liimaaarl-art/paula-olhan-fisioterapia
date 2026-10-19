@@ -31,11 +31,12 @@ new=old+"""
     toast(target===oldTime?'Atendimento movido para o novo dia.':`Atendimento movido para ${target}, próximo horário livre do profissional.`);
   };
 """
-if old not in s: raise SystemExit('Bloco dropAppointment não encontrado; nada alterado')
-s=s.replace(old,new,1)
-old_drop="""ondrop=\"dropAppointment('${d}',(db.appointments.find(a=>a.id===(draggedAppointmentId||event.dataTransfer.getData('text/plain')))?.time||'08:00'),event)\""" 
+if 'window.dropAppointmentToDay=function' not in s:
+    if old not in s: raise SystemExit('Bloco dropAppointment não encontrado; nada alterado')
+    s=s.replace(old,new,1)
+old_drop="""ondrop=\"dropAppointment('${d}',(db.appointments.find(a=>a.id===(draggedAppointmentId||event.dataTransfer.getData('text/plain')))?.time||'08:00'),event)\"""
 new_drop="""ondrop=\"dropAppointmentToDay('${d}',event)\"""
-if old_drop not in s: raise SystemExit('Drop do calendário mensal não encontrado; nada alterado')
-s=s.replace(old_drop,new_drop,1)
+if old_drop in s:s=s.replace(old_drop,new_drop,1)
+elif new_drop not in s:raise SystemExit('Drop do calendário mensal não encontrado; nada alterado')
 p.write_text(s,encoding='utf-8')
 print('Correção de arrastar no calendário aplicada')
