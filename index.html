@@ -522,89 +522,6 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
 
 
 
-<script>
-/* === OLHAN V8 — ajustes solicitados pela Paula em 18/10/2026 === */
-(function(){
-  // Cadastro completo das profissionais.
-  window.teamForm=function(tid){
-    let t=db.team.find(x=>x.id===tid)||{};
-    modal(tid?'Editar profissional':'Novo profissional',`<div class="formgrid">
-      ${field('name','Nome completo',t.name,'text','required')}
-      ${field('cpf','CPF',t.cpf,'text','placeholder="000.000.000-00"')}
-      ${field('rg','RG',t.rg)}
-      ${area('address','Endereço completo',t.address)}
-      ${field('crefito','Nº CREFITO',t.crefito)}
-      ${select('maritalStatus','Estado civil',['Solteira','Casada','União estável','Divorciada','Viúva','Outro'],t.maritalStatus||'Solteira')}
-      ${field('role','Profissão / função',t.role||'Fisioterapeuta')}
-      ${field('email','E-mail',t.email,'email')}
-      ${field('repasse','Porcentagem de repasse (%)',t.repasse??0,'number','min="0" max="100" step="0.01"')}
-    </div>`,data=>{
-      if(!data.name.trim())return toast('Informe o nome da profissional.');
-      const rep=Number(data.repasse||0);if(rep<0||rep>100)return toast('O repasse deve ficar entre 0% e 100%.');
-      t=db.team.find(x=>x.id===tid)||{};Object.assign(t,data,{repasse:rep});
-      if(!tid){t.id=id();db.team.push(t)}commit('Dados da profissional atualizados.');
-    });
-  };
-  window.team=function(){return head('Nossa equipe','Profissionais que fazem o cuidado acontecer.',btn('Novo profissional','teamForm()'))+`<div class="grid3">${db.team.map(t=>`<section class="card patient"><div class="patient-top"><span class="avatar">${esc(initials(t.name))}</span><div><h3>${esc(t.name)}</h3><p>${esc(t.role||'Fisioterapeuta')}</p></div></div><div class="patient-info"><span>CREFITO: ${esc(t.crefito||'Não informado')}</span><span>E-mail: ${esc(t.email||'Não informado')}</span><span>Repasse: ${Number(t.repasse||0).toLocaleString('pt-BR')}%</span><span>${db.patients.filter(p=>p.pro===t.id).length} pacientes vinculados</span></div>${btn('Editar profissional',`teamForm('${t.id}')`,'users','secondary')}</section>`).join('')}</div><p class="note">CPF, RG, endereço e demais dados ficam disponíveis na edição do cadastro. Na versão de produção, dados pessoais devem ficar protegidos por autenticação e permissões.</p>`};
-
-  // Ao arrastar um atendimento recorrente, escolher se muda só este ou a sequência futura.
-  window.dropAppointment=function(date,time,ev){
-    ev?.preventDefault();const aid=draggedAppointmentId||ev?.dataTransfer?.getData('text/plain');draggedAppointmentId=null;
-    const a=db.appointments.find(x=>x.id===aid);if(!a)return;
-    if(billed(a)||db.records.some(r=>r.appointment===aid&&!r.draft))return toast('Atendimento fechado ou com registro clínico não pode ser movido.');
-    const oldDate=a.date,oldTime=a.time;
-    const future=a.seriesId?db.appointments.filter(x=>x.seriesId===a.seriesId&&x.date>=oldDate&&!billed(x)&&!db.records.some(r=>r.appointment===x.id&&!r.draft)).sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time)):[];
-    let changeSeries=false;
-    if(future.length>1)changeSeries=confirm('Este atendimento faz parte de uma recorrência.\n\nOK = alterar este e todos os próximos até o fim do período.\nCancelar = alterar somente este atendimento.');
-    const targets=changeSeries?future:[a];
-    const dayDelta=Math.round((new Date(date+'T12:00:00')-new Date(oldDate+'T12:00:00'))/86400000);
-    const tm=x=>Number(x.slice(0,2))*60+Number(x.slice(3)); const timeDelta=tm(time)-tm(oldTime);
-    const moved=targets.map((x,i)=>{
-      if(x.id===a.id)return {...x,date,time};
-      const nd=add(x.date,dayDelta),mins=tm(x.time)+timeDelta;
-      return {...x,date:nd,time:String(Math.floor(mins/60)).padStart(2,'0')+':'+String((mins%60+60)%60).padStart(2,'0')};
-    });
-    for(const m of moved){
-      if(tm(m.time)<0||tm(m.time)+Number(m.duration)>1440)return toast('A alteração faria um atendimento ultrapassar o limite do dia.');
-      const ignore=targets.map(x=>x.id);const conflict=db.appointments.some(x=>!ignore.includes(x.id)&&x.pro===m.pro&&x.date===m.date&&!x.status.includes('Cancelado')&&overlap(x.time,x.duration,m.time,m.duration));
-      if(conflict)return toast(`Há conflito de horário em ${fmt(m.date)} às ${m.time}. Nenhuma alteração foi aplicada.`);
-    }
-    moved.forEach(m=>{const x=db.appointments.find(y=>y.id===m.id);x.history=x.history||[];x.history.push(`${new Date().toLocaleString('pt-BR')}: movido de ${x.date} ${x.time} para ${m.date} ${m.time}${changeSeries?' (recorrência futura)':''}`);x.date=m.date;x.time=m.time;x.status=x.status==='Agendado'?'Remarcado':x.status});
-    save();render();toast(changeSeries?`${moved.length} atendimentos futuros foram atualizados.`:'Somente este atendimento foi atualizado.');
-  };
-
-  // Portal demonstrativo do paciente/familiar. Em produção, o login deve usar backend e autenticação real.
-  window.openPatientPortal=function(pid){
-    const p=patient(pid), recs=db.records.filter(r=>r.patient===pid&&!r.draft).sort((a,b)=>(b.date||'').localeCompare(a.date||'')), files=db.files.filter(f=>f.patient===pid), contracts=(db.contracts||[]).filter(c=>c.patient===pid), apps=db.appointments.filter(a=>a.patient===pid&&['Realizado','Cancelado com cobrança'].includes(a.status)).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
-    if(!p.portalPin)p.portalPin=String(Math.floor(100000+Math.random()*900000));p.portalEnabled=true;save();
-    modal('Acesso do paciente / familiar',`<div class="formgrid"><div class="wide note"><b>Portal demonstrativo de ${esc(p.name)}</b><br>PIN provisório: <b style="font-size:18px">${esc(p.portalPin)}</b><br><small>Na versão online, o acesso será individual, autenticado e protegido.</small></div></div>
-      <div class="segments" style="margin:18px 0"><button class="selected">Resumo do portal</button></div>
-      <section class="card" style="margin-bottom:14px"><div class="cardhead"><div><h2>Histórico de atendimentos</h2><p>O que foi realizado e registrado para compartilhamento.</p></div><span class="tag">${apps.length}</span></div>${apps.slice(0,12).map(a=>`<div class="record"><h3>${fmt(a.date)} · ${esc(a.service)}</h3><p>${esc(a.status)} · ${esc(professional(a.pro))}</p></div>`).join('')||'<div class="empty">Nenhum atendimento concluído.</div>'}</section>
-      <section class="card" style="margin-bottom:14px"><div class="cardhead"><div><h2>Evoluções liberadas</h2><p>Atualizadas a partir do prontuário.</p></div><span class="tag">${recs.length}</span></div>${recs.slice(0,10).map(r=>`<div class="record"><h3>${fmt(r.date)} · ${esc(r.type)}</h3><p>${esc(r.general||r.conduct||'Registro clínico realizado.')}</p></div>`).join('')||'<div class="empty">Nenhuma evolução concluída.</div>'}</section>
-      <section class="card" style="margin-bottom:14px"><div class="cardhead"><div><h2>Contratos</h2><p>Documentos vinculados ao paciente.</p></div><span class="tag">${contracts.length}</span></div>${contracts.map(c=>`<div class="record"><h3>${esc(c.status||'Rascunho')} · ${esc(c.clientName||p.name)}</h3><p>${c.signedAt?'Assinado em '+new Date(c.signedAt).toLocaleDateString('pt-BR'):'Contrato disponível no sistema'}</p></div>`).join('')||'<div class="empty">Nenhum contrato vinculado.</div>'}</section>
-      <section class="card"><div class="cardhead"><div><h2>Fotos, vídeos e documentos</h2><p>Registros anexados ao prontuário.</p></div><span class="tag">${files.length}</span></div>${files.map(f=>`<div class="record"><a href="${f.data}" download="${esc(f.name)}">${esc(f.name)}</a> <small>· ${fmt(f.date)}</small></div>`).join('')||'<div class="empty">Nenhum arquivo anexado.</div>'}</section>`,null);
-  };
-  const previousDetail=window.detail;
-  window.detail=function(){let html=previousDetail();const p=patient(patientId);return `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">${btn('Acesso do paciente / familiar',`openPatientPortal('${p.id}')`,'users','secondary')}</div>`+html};
-
-  // Atualiza o render para usar as versões V8 das telas sobrescritas.
-  window.render=function(){document.getElementById('nav').innerHTML=navs.map(n=>`<button class="${view===n[0]?'active':''}" onclick="go('${n[0]}')">${ic(n[2])}${n[1]}</button>`).join('');document.getElementById('crumb').textContent=navs.find(n=>n[0]===view)?.[1];document.getElementById('menubtn').innerHTML=ic('menu');document.getElementById('app').innerHTML=(patientId?detail():view==='home'?home():view==='agenda'?agenda():['patients','records'].includes(view)?patients():view==='evaluations'?evaluations():view==='finance'?finance():view==='team'?team():view==='reports'?reports():view==='birthdays'?head('Datas para lembrar','Pequenos gestos que aproximam. Próximos 7 dias.')+`<section class="card">${birthdayList()}<p class="note">Lembretes exibidos dentro do aplicativo.</p></section>`:view==='contracts'?contracts():settings())+'<div class="foot">OLHAN · FISIOTERAPIA DOMICILIAR ESPECIALIZADA · V8</div>';bindEvaluationForm()};
-  render();
-})();
-</script>
-
-
-<script id="olhan-v12-backend-status">
-(function(){
-  window.olhanOnlineStatus=async function(){
-    try{
-      const r=await fetch('/api/health',{cache:'no-store'});
-      const j=await r.json();
-      modal('Servidor Olhan', `<div class="record"><h3>${j.ok?'Servidor conectado':'Falha na conexão'}</h3><p>${j.ok?'Vercel conseguiu consultar o banco Neon com a credencial protegida no servidor.':'O backend respondeu, mas não conseguiu consultar o Neon.'}</p></div><p class="note">A DATABASE_URL permanece somente no servidor da Vercel.</p>`,()=>{},'Fechar');
-    }catch(e){ modal('Servidor Olhan','<div class="record"><h3>Backend indisponível</h3><p>Não foi possível acessar /api/health.</p></div>',()=>{},'Fechar'); }
-  };
-})();
-</script>
 </body></html>`);w.document.close();
   }
 
@@ -1451,7 +1368,7 @@ Limeira/SP, ${dateText}.`;
   window.detail=function(){let html=previousDetail();const p=patient(patientId);return `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">${btn('Acesso do paciente / familiar',`openPatientPortal('${p.id}')`,'users','secondary')}</div>`+html};
 
   // Atualiza o render para usar as versões V8 das telas sobrescritas.
-  window.render=function(){document.getElementById('nav').innerHTML=navs.map(n=>`<button class="${view===n[0]?'active':''}" onclick="go('${n[0]}')">${ic(n[2])}${n[1]}</button>`).join('');document.getElementById('crumb').textContent=navs.find(n=>n[0]===view)?.[1];document.getElementById('menubtn').innerHTML=ic('menu');document.getElementById('app').innerHTML=(patientId?detail():view==='home'?home():view==='agenda'?agenda():['patients','records'].includes(view)?patients():view==='evaluations'?evaluations():view==='finance'?finance():view==='team'?team():view==='reports'?reports():view==='birthdays'?head('Datas para lembrar','Pequenos gestos que aproximam. Próximos 7 dias.')+`<section class="card">${birthdayList()}<p class="note">Lembretes exibidos dentro do aplicativo.</p></section>`:view==='contracts'?contracts():settings())+'<div class="foot">OLHAN · FISIOTERAPIA DOMICILIAR ESPECIALIZADA · V8</div>';bindEvaluationForm()};
+  window.render=function(){document.getElementById('nav').innerHTML=navs.map(n=>`<button class="${view===n[0]?'active':''}" onclick="go('${n[0]}')">${ic(n[2])}${n[1]}</button>`).join('');document.getElementById('crumb').textContent=navs.find(n=>n[0]===view)?.[1];document.getElementById('menubtn').innerHTML=ic('menu');document.getElementById('app').innerHTML=(patientId?detail():view==='home'?home():view==='agenda'?agenda():['patients','records'].includes(view)?patients():view==='evaluations'?evaluations():view==='finance'?finance():view==='team'?team():view==='reports'?reports():view==='birthdays'?head('Datas para lembrar','Pequenos gestos que aproximam. Próximos 7 dias.')+`<section class="card">${birthdayList()}<p class="note">Lembretes exibidos dentro do aplicativo.</p></section>`:view==='contracts'?contracts():settings())+'<div class="foot">OLHAN · FISIOTERAPIA DOMICILIAR ESPECIALIZADA · V13</div>';bindEvaluationForm()};
   render();
 })();
 </script>
@@ -1507,18 +1424,28 @@ window.loadCurrentContractFromServer = async function(type='patient'){
 const _v9Settings = window.settings;
 window.settings=function(){
   const html=_v9Settings();
-  return html.replace('</main>', `<section class="card" style="margin-top:14px"><div class="cardhead"><div><h2>Servidor Olhan</h2><p>Neon Auth + Neon Data API configurados para a versão online.</p></div><span class="tag">V9</span></div><div class="contract-actions"><button class="btn secondary small" onclick="olhanOnlineStatus()">Verificar servidor</button></div><p class="note">Dados clínicos não são liberados sem autenticação. Fotos e vídeos deverão permanecer em armazenamento privado, com acesso temporário para usuários autorizados.</p></section></main>`);
+  return html.replace('</main>', `<section class="card" style="margin-top:14px"><div class="cardhead"><div><h2>Servidor Olhan</h2><p>Neon Auth + Neon Data API configurados para a versão online.</p></div><span class="tag">V13</span></div><div class="contract-actions"><button class="btn secondary small" onclick="olhanOnlineStatus()">Verificar servidor</button></div><p class="note">Dados clínicos não são liberados sem autenticação. Fotos e vídeos deverão permanecer em armazenamento privado, com acesso temporário para usuários autorizados.</p></section></main>`);
 };
 
 const _v9Render = window.render;
 window.render=function(){
   _v9Render();
   const foot=document.querySelector('.footer-note,.v8-footer');
-  if(foot) foot.textContent='Olhan App V9 · backend Neon preparado · autenticação obrigatória para dados de saúde';
+  if(foot) foot.textContent='Olhan App V13 · Vercel + Neon · contratos versionados';
 };
 try{ render(); }catch(e){}
 </script>
-</body></html>
+<script id="olhan-v12-backend-status">
+(function(){
+  window.olhanOnlineStatus=async function(){
+    try{
+      const r=await fetch('/api/health',{cache:'no-store'});
+      const j=await r.json();
+      modal('Servidor Olhan', `<div class="record"><h3>${j.ok?'Servidor conectado':'Falha na conexão'}</h3><p>${j.ok?'Vercel conseguiu consultar o banco Neon com a credencial protegida no servidor.':'O backend respondeu, mas não conseguiu consultar o Neon.'}</p></div><p class="note">A DATABASE_URL permanece somente no servidor da Vercel.</p>`,()=>{},'Fechar');
+    }catch(e){ modal('Servidor Olhan','<div class="record"><h3>Backend indisponível</h3><p>Não foi possível acessar /api/health.</p></div>',()=>{},'Fechar'); }
+  };
+})();
+</script>
 <script id="olhan-v11-online-contracts">
 (function(){
   async function api(body){
@@ -1529,31 +1456,48 @@ try{ render(); }catch(e){}
     try{
       const {templates}=await api();
       const current=templates.filter(t=>t.is_current);
-      modal('Modelos de contrato no servidor',`<p class="note">Ao salvar uma alteração, o sistema cria uma <b>nova versão</b>. Contratos já emitidos mantêm o texto anterior.</p>${current.map(t=>`<section class="card" style="margin:12px 0"><h3>${esc(t.title)}</h3><p>${t.contract_type==='patient'?'Paciente':'Equipe'} · versão ${t.version}</p><button class="btn secondary small" onclick="editOnlineTemplate(${t.id})">Editar e criar nova versão</button></section>`).join('')||'<div class="empty">Nenhum modelo vigente.</div>'}`,()=>{},'Fechar');
+      modal('Modelos de contrato no servidor',`<p class="note">Ao salvar uma alteração, o sistema cria uma <b>nova versão</b>. Contratos já emitidos mantêm o texto anterior.</p>${current.map(t=>`<section class="card" style="margin:12px 0"><h3>${esc(t.title)}</h3><p>${t.template_key==='patient_service'?'Paciente':t.template_key==='team_service'?'Equipe / prestação de serviço':t.template_key==='team_ip'?'Equipe / propriedade intelectual':(t.contract_type==='patient'?'Paciente':'Equipe')} · versão ${t.version}</p><button class="btn secondary small" onclick="editOnlineTemplate(${t.id})">Editar e criar nova versão</button></section>`).join('')||'<div class="empty">Nenhum modelo vigente.</div>'}`,()=>{},'Fechar');
     }catch(e){toast('Não foi possível acessar os modelos online: '+e.message)}
   };
   window.editOnlineTemplate=async function(id){
     try{
       const {templates}=await api(); const t=templates.find(x=>Number(x.id)===Number(id)); if(!t)return;
       modal('Nova versão do modelo',`<div class="contract-editor"><div class="formgrid">${field('title','Título',t.title,'text','required')}</div><label class="wide">Texto do modelo<textarea name="content" required>${esc(t.content)}</textarea></label><p class="note">O texto atual continuará preservado como versão ${t.version}. O salvamento abaixo cria a próxima versão.</p></div>`,async data=>{
-        try{const out=await api({action:'new-version',contract_type:t.contract_type,title:data.title,content:data.content});toast('Modelo salvo como versão '+out.template.version+'.');render()}catch(e){toast('Erro ao salvar: '+e.message)}
+        try{const out=await api({action:'new-version',template_key:t.template_key,contract_type:t.contract_type,title:data.title,content:data.content});toast('Modelo salvo como versão '+out.template.version+'.');render()}catch(e){toast('Erro ao salvar: '+e.message)}
       },'Criar nova versão');
     }catch(e){toast('Erro: '+e.message)}
   };
   window.newContractFromOnlineTemplate=async function(){
     try{
-      const {templates}=await api(); const t=templates.find(x=>x.contract_type==='patient'&&x.is_current); if(!t)return toast('Não há modelo de paciente vigente no servidor.');
+      const {templates}=await api(); const t=templates.find(x=>x.template_key==='patient_service'&&x.is_current); if(!t)return toast('Não há modelo de paciente vigente no servidor.');
       const p=db.patients[0]; if(!p)return toast('Cadastre um paciente primeiro.');
       const c={id:id(),patient:p.id,patientName:p.name,patientCpf:p.cpf||'',clientName:p.responsible||p.name,clientCpf:p.responsible?(p.responsibleCpf||''):(p.cpf||''),clientAddress:p.address||'',sessionValue:Number(p.price||0),body:t.content,templateId:t.id,templateVersion:t.version,status:'Rascunho',created:new Date().toISOString(),updated:new Date().toISOString()};
       db.contracts.push(c);save();contractForm(c.id);
+    }catch(e){toast('Erro: '+e.message)}
+  };
+  window.newContractFromOnlineTemplateKey=async function(templateKey){
+    try{
+      const {templates}=await api(); const t=templates.find(x=>x.template_key===templateKey&&x.is_current); if(!t)return toast('Não há modelo vigente no servidor.');
+      if(templateKey==='patient_service') return newContractFromOnlineTemplate();
+      const member=(db.team||[])[0]; if(!member)return toast('Cadastre um profissional da equipe primeiro.');
+      const c={id:id(),patient:null,patientName:'',clientName:member.name||'',clientCpf:member.cpf||'',clientAddress:member.address||'',body:t.content,templateId:t.id,templateKey:t.template_key,templateVersion:t.version,contractType:t.contract_type,status:'Rascunho',created:new Date().toISOString(),updated:new Date().toISOString()};
+      db.contracts.push(c);save();contractForm(c.id);
+    }catch(e){toast('Erro: '+e.message)}
+  };
+  window.chooseOnlineContractTemplate=async function(){
+    try{
+      const {templates}=await api(); const current=templates.filter(t=>t.is_current);
+      const label=k=>k==='patient_service'?'Paciente':k==='team_service'?'Equipe — prestação de serviço':k==='team_ip'?'Equipe — propriedade intelectual':k;
+      modal('Novo contrato pelo modelo online',current.map(t=>`<section class="card" style="margin:10px 0"><h3>${esc(label(t.template_key))}</h3><p>${esc(t.title)} · versão ${t.version}</p><button class="btn small" onclick="closeModal();newContractFromOnlineTemplateKey('${t.template_key}')">Usar este modelo</button></section>`).join('')||'<div class="empty">Nenhum modelo vigente.</div>',()=>{},'Fechar');
     }catch(e){toast('Erro: '+e.message)}
   };
   const oldContracts=window.contracts;
   window.contracts=function(){
     let html=oldContracts();
     const marker='<div class="toolbar">';
-    html=html.replace(marker,`<div class="v6-contract-template-bar"><div><b>Modelos online</b><small>Versionados no Neon. Alterações valem para novos contratos; os anteriores permanecem preservados.</small></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn secondary small" onclick="openOnlineTemplates()">Editar modelos</button><button class="btn small" onclick="newContractFromOnlineTemplate()">Novo pelo modelo online</button></div></div>${marker}`);
+    html=html.replace(marker,`<div class="v6-contract-template-bar"><div><b>Modelos online</b><small>Versionados no Neon. Alterações valem para novos contratos; os anteriores permanecem preservados.</small></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn secondary small" onclick="openOnlineTemplates()">Editar modelos</button><button class="btn small" onclick="chooseOnlineContractTemplate()">Novo pelo modelo online</button></div></div>${marker}`);
     return html;
   };
 })();
 </script>
+</body></html>
