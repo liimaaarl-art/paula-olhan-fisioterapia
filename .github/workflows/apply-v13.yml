@@ -1,0 +1,34 @@
+name: Apply Olhan V13
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/upgrade_v13.py'
+permissions:
+  contents: write
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact V13 patch
+        run: python scripts/upgrade_v13.py
+      - name: Verify target
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          h=hashlib.sha256(Path('index.html').read_bytes()).hexdigest()
+          expected='03bdaa4444974a4990425f1ad3853ad1d6950cc49069f84d4802ae8ae5cdbcd8'
+          print('sha256',h)
+          assert h==expected, 'V13 gerada não corresponde ao arquivo validado'
+          PY
+      - name: Commit V13
+        run: |
+          git config user.name 'Florindo Sistemas Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Deploy Olhan V13 corrected' || exit 0
+          git push
