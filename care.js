@@ -204,7 +204,16 @@
   const oldDetail=window.detail;window.detail=function(){return oldDetail()+`<section class="care-actions care-patient-tools">${button('Metas e exercícios','careOpenFollow',[patientId])}${button('Relatório de evolução','careReport',[patientId])}</section>`};
   const oldSettings=window.settings;window.settings=function(){return oldSettings()+`<section class="card care-section"><div class="settingrow"><div><h3>Agenda domiciliar</h3><p>Intervalo mínimo entre sessões: ${gap()} minutos.</p></div>${button('Ajustar','carePreferences')}</div><div class="settingrow"><div><h3>Novos registros V14</h3><p>Metas, planos, biblioteca e vínculos são incluídos no backup JSON do aplicativo.</p></div>${button('Exportar backup','exportBackup')}</div></section>`};
   // Mantém a exportação HTML independente incluindo os novos recursos.
-  window.downloadHtml=async function(){try{const [js,css]=await Promise.all(['care.js','care.css'].map(p=>fetch(p).then(r=>{if(!r.ok)throw Error();return r.text()})));const doc=document.documentElement.cloneNode(true);doc.querySelector('script[src="care.js"]')?.remove();doc.querySelector('link[href="care.css"]')?.remove();const style=document.createElement('style');style.textContent=css;doc.querySelector('head').append(style);const script=document.createElement('script');script.textContent=js;doc.querySelector('body').append(script);download('Olhan_App_v14.html','<!doctype html>\n'+doc.outerHTML,'text/html;charset=utf-8')}catch{toast('Não foi possível baixar a versão independente. Use o aplicativo online e exporte o backup JSON.')}};
+  window.downloadHtml=async function(){
+    try{
+      const sources=[['care.css','style'],['bi.css','style'],['care.js','script'],['bi.js','script']];
+      const external=sources.filter(([path,type])=>document.querySelector(type==='style'?`link[href="${path}"]`:`script[src="${path}"]`));
+      const contents=await Promise.all(external.map(async([path,type])=>{const r=await fetch(path);if(!r.ok)throw Error();return {path,type,text:await r.text()}}));
+      const doc=document.documentElement.cloneNode(true);
+      for(const {path,type,text} of contents){doc.querySelector(type==='style'?`link[href="${path}"]`:`script[src="${path}"]`)?.remove();const el=document.createElement(type);el.textContent=text;doc.querySelector(type==='style'?'head':'body').append(el)}
+      download('Olhan_App_v15_BI.html','<!doctype html>\n'+doc.outerHTML,'text/html;charset=utf-8');
+    }catch{toast('Não foi possível baixar a versão independente. Use o aplicativo online e exporte o backup JSON.')}
+  };
   const newNavs=[['care-pending','Pendências','clock'],['care-exercises','Exercícios','heart'],['care-follow','Acompanhamento','chart']];
   for(const n of newNavs)if(!navs.some(x=>x[0]===n[0]))navs.splice(navs.length-1,0,n);
   const previousGo=window.go;window.go=function(v){previousGo(v);window.scrollTo(0,0)};
