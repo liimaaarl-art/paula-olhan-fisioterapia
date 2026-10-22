@@ -10,6 +10,8 @@ Edição pelo formulário, arraste, reposição/substituição e propostas do as
 
 O menu e a página inicial oferecem **Assistente Olhan**. A IA propõe operações validadas por `assistant-actions.js`. As operações passam por revisão antes de salvar. Alterações de agenda ainda exigem a escolha de alcance. Contratos, fechamentos e evoluções abrem formulários para revisão, sem assinatura, pagamento ou conclusão clínica automática. Limites de demonstração continuam em vigor.
 
+O assistente aceita gravação ou arquivo de áudio para transcrever um pedido editável, preservando o texto digitado. A transcrição nunca executa ações. Sair da página encerra o microfone, cancela pedidos pendentes e descarta o áudio.
+
 A evolução aceita gravação de até três minutos, arquivo de áudio de até 2,5 MB ou texto. O servidor usa Groq para transcrição e organização fiel do relato. Não preenche valores ausentes nem determina condutas clínicas. A profissional escolhe os campos que deseja aplicar. Campos manuais começam desmarcados. O áudio não é armazenado no aplicativo.
 
 ### Ativação no servidor
@@ -21,7 +23,7 @@ Cadastrar **somente nas variáveis de ambiente da Vercel**:
 - `GROQ_TEXT_MODEL` (opcional): padrão `openai/gpt-oss-120b`.
 - `GROQ_TRANSCRIPTION_MODEL` (opcional): padrão `whisper-large-v3`.
 
-Depois de configurar, fazer novo deploy e usar **Assistente Olhan > Conectar IA** com o código de acesso. A chave do provedor nunca é enviada ao navegador. O código de acesso fica em `sessionStorage` e não entra no backup. Sem as duas variáveis obrigatórias, `/api/ai` responde `AI_NOT_CONFIGURED` e não chama o provedor. Não copiar credenciais de outro projeto.
+Depois de configurar, fazer novo deploy e usar **Assistente Olhan > Conectar IA** com o código de acesso. A chave do provedor nunca é enviada ao navegador. O código é validado em `/api/ai-access` e não fica salvo no JavaScript. A sessão usa cookie assinado `__Host-olhan-ai`, HttpOnly, Secure e SameSite=Strict. A opção Manter conectado dura até 30 dias; desmarcada, o cookie dura a sessão do navegador. Desconectar remove o cookie; trocar o código no servidor invalida todas as sessões existentes. Cookies não entram no backup. Sessões exigem HTTPS. O token legado de sessionStorage é aceito temporariamente e removido ao reconectar. Sem as duas variáveis obrigatórias, `/api/ai` responde `AI_NOT_CONFIGURED` e não chama o provedor. Não copiar credenciais de outro projeto.
 
 A proteção por código é específica da IA. A autenticação de usuários e a sincronização dos cadastros clínicos continuam pendentes. Dados e áudios enviados à IA são processados pela Groq. O servidor não registra texto, áudio ou chave nos logs. O limite em memória de requisições é apenas uma proteção adicional, sem substituir autenticação e quotas do provedor.
 
