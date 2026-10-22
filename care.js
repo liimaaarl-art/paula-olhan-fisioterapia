@@ -206,12 +206,12 @@
   // Mantém a exportação HTML independente incluindo os novos recursos.
   window.downloadHtml=async function(){
     try{
-      const sources=[['care.css','style'],['bi.css','style'],['care.js','script'],['bi.js','script']];
+      const sources=[['care.css','style'],['bi.css','style'],['care.js','script'],['bi.js','script'],['assistant.css','style'],['schedule.js','script'],['assistant-actions.js','script'],['assistant.js','script'],['team-contracts.js','script']];
       const external=sources.filter(([path,type])=>document.querySelector(type==='style'?`link[href="${path}"]`:`script[src="${path}"]`));
       const contents=await Promise.all(external.map(async([path,type])=>{const r=await fetch(path);if(!r.ok)throw Error();return {path,type,text:await r.text()}}));
       const doc=document.documentElement.cloneNode(true);
       for(const {path,type,text} of contents){doc.querySelector(type==='style'?`link[href="${path}"]`:`script[src="${path}"]`)?.remove();const el=document.createElement(type);el.textContent=text;doc.querySelector(type==='style'?'head':'body').append(el)}
-      download('Olhan_App_v15_BI.html','<!doctype html>\n'+doc.outerHTML,'text/html;charset=utf-8');
+      download('Olhan_App_v16_Assistente.html','<!doctype html>\n'+doc.outerHTML,'text/html;charset=utf-8');
     }catch{toast('Não foi possível baixar a versão independente. Use o aplicativo online e exporte o backup JSON.')}
   };
   const newNavs=[['care-pending','Pendências','clock'],['care-exercises','Exercícios','heart'],['care-follow','Acompanhamento','chart']];
