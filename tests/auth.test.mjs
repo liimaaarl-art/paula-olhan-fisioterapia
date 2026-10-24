@@ -40,6 +40,17 @@ test('primeiro acesso: somente e-mail reservado recebe conta; senha nunca é ger
   assert.equal(f.database.prepare('select count(*) as n from olhan_auth_account').get().n,0);
   assert.equal((await f.request('sign-up/email',{email:adminEmail,password,name:'Fake',role:'admin'})).status,404);
 });
+test('endereço antigo cadastrado não recebe convite e perfil revogado não é reativado',async()=>{
+  const f=await fixture(),ctx=await f.auth.$context;
+  await ctx.internalAdapter.createUser({email:'old-address@example.test',name:'Retired',emailVerified:false});
+  assert.equal((await f.request('request-password-reset',{email:'old-address@example.test'})).status,200);
+  assert.equal(f.mails.length,0);
+  await f.reset();assert.equal(f.mails.length,1);
+  const account=await ctx.internalAdapter.findUserByEmail(adminEmail);
+  await ctx.internalAdapter.updateUser(account.user.id,{role:'revoked'});
+  assert.equal((await f.reset()).status,200);assert.equal(f.mails.length,1);
+  assert.equal((await ctx.internalAdapter.findUserByEmail(adminEmail)).user.role,'revoked');
+});
 test('link de senha continua válido após 23 horas e só pode ser usado uma vez',async()=>{
   const f=await fixture();await f.reset();
   const token=new URLSearchParams(new URL(f.mails.at(-1).link).hash.slice(1)).get('reset');
