@@ -1,1 +1,57 @@
-{"functions":{"api/ai.js":{"maxDuration":120}}}
+{
+  "functions": {
+    "api/ai.js": {
+      "maxDuration": 120
+    },
+    "api/app.js": {
+      "includeFiles": "index.html"
+    },
+    "api/auth/[...path].js": {
+      "maxDuration": 60
+    }
+  },
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/app"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/api/app"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        }
+      ]
+    },
+    {
+      "source": "/login.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+        }
+      ]
+    }
+  ]
+}

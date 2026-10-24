@@ -1,3 +1,4 @@
+import { protect } from '../lib/auth-guard.js';
 import { r2Config, probeR2 } from '../lib/r2.js';
 import { json } from '../lib/db.js';
 
@@ -33,4 +34,4 @@ export function storageHandler({ config = r2Config, probe = probeR2, now = Date.
   };
 }
 
-export default storageHandler();
+export default protect(storageHandler());

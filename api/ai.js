@@ -1,3 +1,4 @@
+import { protect } from '../lib/auth-guard.js';
 import { generateText, Output, transcribe } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
 import { json } from '../lib/db.js';
@@ -6,7 +7,7 @@ import { authorized,audioFromBody,validateText,evolutionSchema,assistantSchema,e
 import {sessionAuthorized,sameOrigin} from '../lib/ai-session.js';
 export const maxDuration=120;
 const rates=new Map();
-export default async function handler(req,res){
+export async function handler(req,res){
   const configured=!!(process.env.GROQ_API_KEY&&process.env.OLHAN_AI_ACCESS_CODE);
   if(req.method==='GET')return json(res,200,{configured,connected:configured&&sessionAuthorized(req,process.env.OLHAN_AI_ACCESS_CODE),provider:'Groq',maxAudioBytes:2500000});
   if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return json(res,405,{error:'Método não permitido.'});}
@@ -33,3 +34,5 @@ export default async function handler(req,res){
     return json(res,200,{...(isAssistant?{proposal:result.output}:{fields:result.output,text})});
   }catch(e){const status=e.statusCode===429?429:502;return json(res,status,{error:status===429?'A IA atingiu o limite de uso. Tente novamente mais tarde.':'A IA não conseguiu concluir. Seu texto e os dados do sistema foram preservados. Confira a configuração ou tente novamente.'});}
 }
+
+export default protect(handler);
