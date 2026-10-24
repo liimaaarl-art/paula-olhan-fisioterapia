@@ -1,6 +1,7 @@
+import { protect } from '../lib/auth-guard.js';
 import { db, json } from '../lib/db.js';
 const allowed=new Set(['patient','team']);
-export default async function handler(req,res){
+export async function handler(req,res){
   try {
     const sql=db();
     if(req.method==='GET'){
@@ -13,3 +14,5 @@ export default async function handler(req,res){
     return json(res,403,{error:'Edição online bloqueada nesta fase de teste sem autenticação'});
   } catch(e){ console.error('contracts error',e); return json(res,500,{error:'Falha no servidor'}); }
 }
+
+export default protect(handler);

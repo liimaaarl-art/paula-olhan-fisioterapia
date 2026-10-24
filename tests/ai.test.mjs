@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import handler from '../api/ai.js';import {authorized,audioFromBody,MAX_AUDIO_BYTES} from '../lib/ai-policy.js';
+import {handler} from '../api/ai.js';import {authorized,audioFromBody,MAX_AUDIO_BYTES} from '../lib/ai-policy.js';
 function response(){return {statusCode:0,headers:{},status(s){this.statusCode=s;return this;},setHeader(k,v){this.headers[k]=v;},end(s){this.body=JSON.parse(s);}};}
 test('status da IA informa configuração sem revelar segredos',async()=>{const previous=process.env.GROQ_API_KEY;delete process.env.GROQ_API_KEY;const r=response();await handler({method:'GET'},r);assert.equal(r.statusCode,200);assert.equal(r.body.configured,false);assert.ok(!JSON.stringify(r.body).includes('API_KEY'));if(previous)process.env.GROQ_API_KEY=previous;});
 test('IA não configurada responde explicitamente e não chama provedor',async()=>{delete process.env.GROQ_API_KEY;const r=response();await handler({method:'POST',headers:{},body:{}},r);assert.equal(r.statusCode,503);assert.equal(r.body.code,'AI_NOT_CONFIGURED');});

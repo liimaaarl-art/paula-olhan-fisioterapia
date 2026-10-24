@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import access from '../api/ai-access.js';import ai from '../api/ai.js';
+import {handler as access} from '../api/ai-access.js';import {handler as ai} from '../api/ai.js';
 import {COOKIE,SESSION_SECONDS,issueSession,sessionAuthorized,sessionCookie} from '../lib/ai-session.js';
 const secret='test-code-with-enough-entropy';
 function response(){return {statusCode:0,headers:{},status(s){this.statusCode=s;return this},setHeader(k,v){this.headers[k]=v},end(s){this.body=JSON.parse(s)}};}

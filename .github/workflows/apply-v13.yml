@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'scripts/**'
+      - 'scripts/upgrade_v13.py'
 permissions:
   contents: write
 jobs:

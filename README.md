@@ -46,3 +46,18 @@ Os cadastros clínicos e os contratos emitidos continuam locais ao navegador. So
 Configurações → Vídeos privados permite verificar a conexão. O status retorna apenas booleanos e um código de situação, sem credenciais, nomes de objetos ou mensagens do provedor. A sonda tem limite de oito segundos, uma tentativa e cache por processo (cinco minutos em sucesso; um minuto em falha), com compartilhamento de requisições simultâneas.
 
 **Envio, leitura e links assinados de vídeos NÃO foram habilitados.** A sessão compartilhada de IA não é usada como autorização para arquivos clínicos. Primeiro é necessário criar autenticação individual da equipe e vincular arquivos/pacientes a permissões verificadas no servidor. Depois integrar upload direto (para evitar o limite de corpo da Vercel), CORS da origem exata, metadados persistidos e reprodução privada. Manter acesso público e r2.dev desativados. O portal demonstrativo e os anexos locais permanecem como antes. Esta entrega prepara e verifica a infraestrutura, sem declarar concluída a integração de vídeos.
+# Acesso de administradora
+
+O acesso individual usa Better Auth 1.7.12 no servidor Vercel e tabelas `olhan_auth_*` no Neon. A identidade gerenciada antiga em `neon_auth` é preservada. A migração aditiva está em `migrations/20261024-admin-auth.sql`; aplique primeiro em uma branch isolada e depois em produção. RLS bloqueia acesso público às tabelas de identidade.
+
+Configure em produção `BETTER_AUTH_URL` (origem HTTPS sem barra final), `BETTER_AUTH_SECRET` (segredo aleatório de pelo menos 32 caracteres), `OLHAN_ADMIN_EMAIL`, `DATABASE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `SMTP_FROM`. Senhas e chaves ficam exclusivamente em variáveis sensíveis do servidor. O Gmail exige senha de app e verificação em duas etapas.
+
+Na tela de acesso, “Primeiro acesso ou esqueci minha senha” envia um link de uso único por 30 minutos ao e-mail cadastrado. Somente o e-mail de administradora reservado pode iniciar a primeira conta; cadastro público está bloqueado. Ela escolhe a senha (mínimo 12 caracteres). Todo novo login com senha exige o link de confirmação por e-mail (10 minutos), sem dispositivo confiável. O link abre uma tela de confirmação; se o e-mail abrir em outro navegador, o código pode ser digitado no navegador original. Links usam fragmentos para não enviar os códigos aos logs HTTP. Nenhuma senha é enviada por e-mail.
+
+Configurações → Conta e senha permite trocar a senha e sair. Redefinir a senha invalida as sessões anteriores e não autentica automaticamente. A sessão dura até 8 horas e usa cookie HttpOnly, Secure em produção e SameSite. Todas as APIs existentes exigem sessão individual; a autorização compartilhada de IA continua sendo uma configuração adicional e não substitui a identidade.
+
+`npm run build` publica somente os arquivos estáticos permitidos. O HTML do aplicativo é entregue por `api/app.js` após checar a sessão no banco. `/` e `/index.html` encaminham para essa função. Não publique `index.html` diretamente nem exponha o diretório de fontes como saída estática.
+
+Os dados clínicos continuam neste navegador; esta entrega não faz sincronização nem concede acesso de familiares/equipe. O R2 permanece sem envio/leitura de arquivos clínicos até haver autorização por paciente no servidor. Faça backup antes de mudar de dispositivo.
+
+Validação: `npm test`. Para testar Postgres em banco isolado, aplique a migração e execute `AUTH_TEST_DATABASE_URL=... node --test tests/auth-postgres.test.mjs`. O teste usa apenas e-mail fictício e entrega de mensagens em memória; nunca use esse teste em produção. Em um preview com banco isolado, `OLHAN_AUTH_SELF_TEST=1` executa essa validação durante o build sem enviar e-mails reais.
