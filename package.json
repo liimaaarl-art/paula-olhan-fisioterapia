@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@ai-sdk/groq": "^4.0.67",
+    "@aws-sdk/client-s3": "3.1156.0",
     "@neondatabase/serverless": "^1.0.2",
     "ai": "^7.0.148",
     "zod": "^4.6.7"
