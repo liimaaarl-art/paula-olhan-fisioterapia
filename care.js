@@ -226,3 +226,31 @@
   window.OlhanCare={model,pendings,conflicts,findConflict,financialIssues,safeUrl,reportHtml,gap,version:14};
   render();
 })();
+
+/* R2 connection status. Patient files remain local until individual access is ready. */
+(() => {
+  'use strict';
+  const previousSettings = window.settings;
+  window.settings = function () {
+    return previousSettings() + `<section class="card" style="margin-top:16px" aria-labelledby="storage-title"><div class="cardhead"><div><h2 id="storage-title">Vídeos privados · Cloudflare R2</h2><p>Verifique a conexão do armazenamento.</p></div></div><div class="record"><p id="storage-status" role="status" aria-live="polite">Conexão ainda não verificada.</p><button type="button" class="btn secondary small" id="storage-check" onclick="olhanCheckStorage()">Verificar conexão R2</button></div><p class="note">O envio e o acesso aos vídeos online aguardam o login individual e as permissões da equipe. Os anexos atuais continuam neste navegador.</p></section>`;
+  };
+  window.olhanCheckStorage = async function () {
+    const button = document.getElementById('storage-check');
+    const status = document.getElementById('storage-status');
+    if (!button || !status || button.disabled) return;
+    button.disabled = true;
+    status.textContent = 'Verificando conexão…';
+    try {
+      const response = await fetch('/api/storage', { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok || typeof result.configured !== 'boolean' || typeof result.connected !== 'boolean') throw new Error();
+      status.textContent = !result.configured
+        ? 'Configuração do R2 incompleta no servidor.'
+        : result.connected
+          ? 'R2 conectado. Envio e acesso aos vídeos aguardam login individual e permissões.'
+          : 'Credenciais cadastradas, mas a conexão não foi confirmada. Confira o bucket e as permissões da chave.';
+    } catch {
+      status.textContent = 'Não foi possível verificar o R2 agora. Tente novamente.';
+    } finally { button.disabled = false; }
+  };
+})();

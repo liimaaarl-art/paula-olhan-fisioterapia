@@ -38,3 +38,11 @@ Contratos da equipe têm edição própria, identificação da profissional, có
 `npm ci` e `npm test` executam os testes de agenda, BI, cuidado, propostas do assistente, integração de formulários e contratos do SDK Groq com respostas simuladas. A chamada real de IA só pode ser validada depois da configuração autorizada das credenciais.
 
 Os cadastros clínicos e os contratos emitidos continuam locais ao navegador. Somente os modelos online estão persistidos no servidor. Exportar backup JSON continua incluindo os dados desta versão.
+
+## Cloudflare R2 — conexão privada preparada
+
+`/api/storage` (GET) verifica a conexão por `HeadBucket`, sem ler nem listar arquivos. Usa `R2_ENDPOINT` (origem S3 sem caminho do bucket), `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID` e `R2_SECRET_ACCESS_KEY`, exclusivamente no servidor. Os aliases `R2_ACESS_KEY_ID` / `R2_SECRET_ACESS_KEY` também são aceitos para preservar os segredos cadastrados na Vercel. O tipo Secret/Sensitive não permite renomear uma variável sem informar novamente seu valor. Nunca puxar ou imprimir os valores para corrigir o nome.
+
+Configurações → Vídeos privados permite verificar a conexão. O status retorna apenas booleanos e um código de situação, sem credenciais, nomes de objetos ou mensagens do provedor. A sonda tem limite de oito segundos, uma tentativa e cache por processo (cinco minutos em sucesso; um minuto em falha), com compartilhamento de requisições simultâneas.
+
+**Envio, leitura e links assinados de vídeos NÃO foram habilitados.** A sessão compartilhada de IA não é usada como autorização para arquivos clínicos. Primeiro é necessário criar autenticação individual da equipe e vincular arquivos/pacientes a permissões verificadas no servidor. Depois integrar upload direto (para evitar o limite de corpo da Vercel), CORS da origem exata, metadados persistidos e reprodução privada. Manter acesso público e r2.dev desativados. O portal demonstrativo e os anexos locais permanecem como antes. Esta entrega prepara e verifica a infraestrutura, sem declarar concluída a integração de vídeos.
