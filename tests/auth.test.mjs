@@ -91,7 +91,7 @@ test('SMTP falho retorna erro sem alegar envio e sem sessão; origem externa é 
   assert.equal((await f.request('sign-in/email',{email:adminEmail,password},{origin:'https://evil.test'})).status,403);
   assert.equal((await f.request('two-factor/enable',{password,method:'otp'})).status,404);
 });
-test('limite de envio persiste no banco, inclusive entre instâncias de autenticação',async()=>{
+test('limite de envio é aplicado usando armazenamento no banco',async()=>{
   const f=await fixture({rateLimit:true});
   await f.reset();await f.reset();assert.equal((await f.reset()).status,429);
   assert.ok(f.database.prepare('select count(*) as n from olhan_auth_rate_limit').get().n>0);
