@@ -40,6 +40,25 @@ test('primeiro acesso: somente e-mail reservado recebe conta; senha nunca é ger
   assert.equal(f.database.prepare('select count(*) as n from olhan_auth_account').get().n,0);
   assert.equal((await f.request('sign-up/email',{email:adminEmail,password,name:'Fake',role:'admin'})).status,404);
 });
+test('link de senha continua válido após 23 horas e só pode ser usado uma vez',async()=>{
+  const f=await fixture();await f.reset();
+  const token=new URLSearchParams(new URL(f.mails.at(-1).link).hash.slice(1)).get('reset');
+  const row=f.database.prepare('select * from olhan_auth_verification').get();
+  assert.ok(Math.abs(new Date(row.expiresAt)-new Date(row.createdAt)-24*60*60*1000)<1000);
+  const age=23*60*60*1000;
+  f.database.prepare('update olhan_auth_verification set createdAt=?,expiresAt=? where id=?').run(new Date(new Date(row.createdAt)-age).toISOString(),new Date(new Date(row.expiresAt)-age).toISOString(),row.id);
+  assert.equal((await f.request('reset-password',{token,newPassword:password})).status,200);
+  assert.equal((await f.request('reset-password',{token,newPassword:password})).status,400);
+  assert.equal((await f.request('get-session')).data,null);
+});
+test('link de senha vencido após 24 horas não permite definir senha',async()=>{
+  const f=await fixture();await f.reset();
+  const token=new URLSearchParams(new URL(f.mails.at(-1).link).hash.slice(1)).get('reset');
+  const row=f.database.prepare('select * from olhan_auth_verification').get(),age=24*60*60*1000+1000;
+  f.database.prepare('update olhan_auth_verification set createdAt=?,expiresAt=? where id=?').run(new Date(new Date(row.createdAt)-age).toISOString(),new Date(new Date(row.expiresAt)-age).toISOString(),row.id);
+  assert.equal((await f.request('reset-password',{token,newPassword:password})).status,400);
+  assert.equal(f.database.prepare('select count(*) as n from olhan_auth_account').get().n,0);
+});
 test('senha correta não libera sessão; link/código é vinculado ao navegador e de uso único', async () => {
   const f=await fixture(); assert.equal((await f.setPassword()).status,200);
   const sign=await f.signin(); assert.equal(sign.status,200); assert.equal(sign.data.twoFactorRedirect,true); assert.equal(sign.data.token,undefined);

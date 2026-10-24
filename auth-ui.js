@@ -41,7 +41,7 @@
   function resetRequest() {
     form('<h1>Crie ou redefina sua senha</h1><p>Enviaremos o link para o e-mail cadastrado no sistema.</p><form>' + input('E-mail cadastrado', 'email', 'email', 'username') + '<button type="submit">Enviar link por e-mail</button></form><a class="text-link" href="/login.html">Voltar para entrar</a>', async data => {
       await api('request-password-reset', { email: data.get('email').trim() });
-      say('Se o e-mail estiver cadastrado, o link chegará em instantes. Confira também a pasta de spam. Ele vale por 30 minutos.');
+      say('Se o e-mail estiver cadastrado, o link chegará em instantes. Confira também a pasta de spam. Ele vale por 24 horas.');
     });
   }
   async function confirm(code) {
