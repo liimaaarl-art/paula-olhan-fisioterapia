@@ -32,7 +32,7 @@
     });
   }
   function login() {
-    form('<h1>Entrar no Olhan</h1><p>Use seu e-mail e senha. Depois, confirme o acesso pelo link enviado ao seu e-mail.</p><form id="login-form" method="post" action="/api/auth/sign-in/email">' + input('E-mail cadastrado', 'email', 'email', 'username') + input('Senha', 'password', 'password', 'current-password') + '<label class="remember-choice"><input name="remember" type="checkbox"><span>Manter conectado neste navegador por 30 dias</span></label><p class="note">Marque em um aparelho de uso pessoal. Você entrará direto enquanto a sessão estiver válida. Para salvar a senha, use a opção oferecida pelo navegador.</p><button type="submit">Entrar</button></form><a class="text-link" href="#" id="forgot">Primeiro acesso ou esqueci minha senha</a>', async data => {
+    form('<h1>Acessar o sistema</h1><p>Use seu e-mail e senha. Depois, confirme o acesso pelo link enviado ao seu e-mail.</p><form id="login-form" method="post" action="/api/auth/sign-in/email">' + input('E-mail cadastrado', 'email', 'email', 'username') + input('Senha', 'password', 'password', 'current-password') + '<label class="remember-choice"><input name="remember" type="checkbox"><span>Manter conectado neste navegador por 30 dias</span></label><p class="note">Marque em um aparelho de uso pessoal. Você entrará direto enquanto a sessão estiver válida. Para salvar a senha, use a opção oferecida pelo navegador.</p><button type="submit">Entrar</button></form><a class="text-link" href="#" id="forgot">Primeiro acesso ou esqueci minha senha</a>', async data => {
       await api('sign-in/email', { email: data.get('email').trim(), password: data.get('password'), rememberMe: data.get('remember') === 'on' });
       challenge();
     });
