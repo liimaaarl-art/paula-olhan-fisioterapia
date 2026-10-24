@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { getMigrations } from 'better-auth/db/migration';
-import { createAuth, adminSession } from '../lib/auth.js';
+import { createAuth, adminSession, REMEMBER_SESSION_SECONDS, SHORT_SESSION_SECONDS } from '../lib/auth.js';
 import { authRequest } from '../lib/auth-route.js';
 import { protect } from '../lib/auth-guard.js';
 import { smtpConfig } from '../lib/auth-mail.js';
@@ -24,7 +24,7 @@ async function fixture({ rateLimit = false, failMail = false } = {}) {
   }
   const reset = () => request('request-password-reset', { email: adminEmail });
   const setPassword = async () => { await reset(); const token = new URLSearchParams(new URL(mails.at(-1).link).hash.slice(1)).get('reset'); return request('reset-password', { token, newPassword:password }); };
-  const signin = () => request('sign-in/email', { email:adminEmail,password });
+  const signin = (rememberMe = false) => request('sign-in/email', { email:adminEmail,password,rememberMe });
   const verify = () => request('two-factor/verify-otp', { code:mails.at(-1).code,trustDevice:false });
   return { database, auth, request, mails, cookie, reset, setPassword, signin, verify };
 }
@@ -67,7 +67,7 @@ test('confirmação expirada, código incorreto e dispositivo confiável não li
   assert.ok((await f.verify()).status>=400);assert.equal((await f.request('get-session')).data,null);
 });
 test('redefinição invalida sessões e token, não autentica e mantém confirmação obrigatória',async()=>{
-  const f=await fixture();await f.setPassword();await f.signin();await f.verify();const oldCookie=f.cookie();
+  const f=await fixture();await f.setPassword();await f.signin(true);await f.verify();const oldCookie=f.cookie();
   await f.reset();const token=new URLSearchParams(new URL(f.mails.at(-1).link).hash.slice(1)).get('reset');
   const nextPassword='Outra-senha-de-teste-456!';
   assert.equal((await f.request('reset-password',{token,newPassword:nextPassword})).status,200);
@@ -75,6 +75,44 @@ test('redefinição invalida sessões e token, não autentica e mantém confirma
   assert.equal((await f.request('reset-password',{token,newPassword:password})).status,400);
   assert.equal((await f.signin()).status,401);
   assert.equal((await f.request('sign-in/email',{email:adminEmail,password:nextPassword})).data.twoFactorRedirect,true);
+  assert.equal((await f.request('get-session')).data,null);
+});
+test('manter conectado persiste por 30 dias somente após confirmar e-mail e restaura sem novo envio',async()=>{
+  const f=await fixture();await f.setPassword();await f.signin(true);
+  assert.equal((await f.request('get-session')).data,null);
+  const confirmed=await f.verify();assert.equal(confirmed.status,200);
+  const sessionCookie=confirmed.headers.getSetCookie().find(c=>c.startsWith('olhan.session_token='));
+  assert.match(sessionCookie,new RegExp('Max-Age='+REMEMBER_SESSION_SECONDS,'i'));assert.match(sessionCookie,/HttpOnly/i);assert.match(sessionCookie,/SameSite=Lax/i);
+  const row=f.database.prepare('select * from olhan_auth_session').get();
+  assert.ok(Math.abs(new Date(row.expiresAt).getTime()-Date.now()-REMEMBER_SESSION_SECONDS*1000)<5000);
+  const mailCount=f.mails.length;
+  assert.equal((await f.request('get-session',undefined,{cookies:f.cookie()})).data.user.email,adminEmail);
+  assert.equal(f.mails.length,mailCount);
+  const rawCookie=f.cookie();await f.request('sign-out',{});
+  assert.equal((await f.request('get-session',undefined,{cookies:rawCookie})).data,null);
+  await f.signin(true);assert.equal((await f.request('get-session')).data,null);
+});
+test('sem manter conectado, cookie não persiste e servidor limita sessão a oito horas',async()=>{
+  const f=await fixture();await f.setPassword();const challenge=await f.signin(false);
+  assert.match(challenge.headers.getSetCookie().find(c=>c.startsWith('olhan.dont_remember=')),/Max-Age=600/i);
+  const confirmed=await f.verify();
+  assert.equal(confirmed.status,200);
+  const sessionCookie=confirmed.headers.getSetCookie().find(c=>c.startsWith('olhan.session_token='));
+  assert.ok(sessionCookie);assert.doesNotMatch(sessionCookie,/Max-Age|Expires=/i);
+  const row=f.database.prepare('select * from olhan_auth_session').get();
+  assert.ok(Math.abs(new Date(row.expiresAt).getTime()-Date.now()-SHORT_SESSION_SECONDS*1000)<5000);
+  assert.equal((await f.request('get-session',undefined,{cookies:''})).data,null);
+});
+test('preferência do login mais recente substitui tentativa anterior ainda não confirmada',async()=>{
+  const f=await fixture();await f.setPassword();await f.signin(false);await f.signin(true);
+  let confirmed=await f.verify();assert.equal(confirmed.status,200);
+  assert.match(confirmed.headers.getSetCookie().find(c=>c.startsWith('olhan.session_token=')),/Max-Age=2592000/i);
+  await f.request('sign-out',{});await f.signin(true);await f.signin(false);confirmed=await f.verify();
+  assert.equal(confirmed.status,200);assert.doesNotMatch(confirmed.headers.getSetCookie().find(c=>c.startsWith('olhan.session_token=')),/Max-Age|Expires=/i);
+});
+test('sessão persistente vencida não é renovada silenciosamente',async()=>{
+  const f=await fixture();await f.setPassword();await f.signin(true);await f.verify();
+  f.database.exec('update olhan_auth_session set expiresAt=1');
   assert.equal((await f.request('get-session')).data,null);
 });
 test('troca de senha exige sessão e senha atual; não permite mudar e-mail ou desativar confirmação',async()=>{
