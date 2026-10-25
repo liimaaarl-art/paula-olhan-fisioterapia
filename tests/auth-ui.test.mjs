@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 const html=await readFile(new URL('../login.html',import.meta.url),'utf8'),script=await readFile(new URL('../auth-ui.js',import.meta.url),'utf8');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function app(hash='',fetcher=async()=>({ok:true,json:async()=>null})){
-  const dom=new JSDOM(html,{url:'https://clinic.example/login.html'+hash,runScripts:'outside-only'});dom.window.fetch=fetcher;dom.window.eval(script);await tick();return dom;
+  const dom=new JSDOM(html,{url:'https://clinic.example/login.html'+hash,runScripts:'outside-only'});dom.window.fetch=async(...args)=>{const response=await fetcher(...args);if(!response.text)response.text=async()=>JSON.stringify(await response.json());return response};dom.window.eval(script);await tick();return dom;
 }
 test('primeiro acesso abre formulário e envia somente e-mail cadastrado',async()=>{
   const calls=[];const dom=await app('',async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>null}}),w=dom.window;
@@ -21,6 +21,14 @@ test('manter conectado é escolha explícita e não salva senha no armazenamento
     form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
     assert.equal(JSON.parse(calls.at(-1).options.body).rememberMe,remember);assert.equal(w.localStorage.length,0);assert.equal(w.sessionStorage.length,0);w.close();
   }
+});
+test('resposta não JSON na entrada mostra orientação em português sem apagar os campos',async()=>{
+  const dom=await app('',async url=>url.endsWith('get-session')?{ok:true,text:async()=>'null'}:{ok:false,status:404,text:async()=>'The page could not be found\nNOT_FOUND'}),w=dom.window;
+  const form=w.document.querySelector('form');form.elements.email.value='owner@example.test';form.elements.password.value='Senha-de-teste-123';
+  form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+  assert.match(w.document.getElementById('access-message').textContent,/Atualize a página/);
+  assert.doesNotMatch(w.document.getElementById('access-message').textContent,/expected pattern|NOT_FOUND/);
+  assert.equal(form.elements.email.value,'owner@example.test');assert.equal(form.elements.password.value,'Senha-de-teste-123');assert.equal(form.querySelector('button').disabled,false);w.close();
 });
 test('link remove token do endereço e não envia senha se confirmação divergir',async()=>{
   const calls=[];const dom=await app('#reset=one-time-test-token',async(...args)=>{calls.push(args);return {ok:true,json:async()=>({status:true})}}),w=dom.window;
