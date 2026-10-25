@@ -6,13 +6,17 @@
     "api/app.js": {
       "includeFiles": "index.html"
     },
-    "api/auth/[...path].js": {
+    "api/auth-handler.js": {
       "maxDuration": 60
     }
   },
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "rewrites": [
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth-handler?authPath=:path*"
+    },
     {
       "source": "/",
       "destination": "/api/app"

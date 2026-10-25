@@ -10,7 +10,9 @@
   const passwords = () => input('Nova senha (mínimo de 12 caracteres)', 'password', 'password', 'new-password', 'minlength="12" maxlength="128"') + input('Repita a nova senha', 'repeat', 'password', 'new-password', 'minlength="12" maxlength="128"');
   async function api(path, body) {
     const response = await fetch('/api/auth/' + path, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-    const data = await response.json();
+    let data;
+    try { data = JSON.parse(await response.text()); }
+    catch { throw new Error('Não foi possível acessar o sistema. Atualize a página e tente novamente. Sua senha não precisa ser criada de novo.'); }
     if (!response.ok) {
       const errors = {
         INVALID_EMAIL_OR_PASSWORD: 'E-mail ou senha incorretos.', EMAIL_NOT_VERIFIED: 'Crie sua senha pelo link enviado ao e-mail cadastrado.',
@@ -33,7 +35,8 @@
   }
   function login() {
     form('<h1>Acessar o sistema</h1><p>Use seu e-mail e senha. Depois, confirme o acesso pelo link enviado ao seu e-mail.</p><form id="login-form" method="post" action="/api/auth/sign-in/email">' + input('E-mail cadastrado', 'email', 'email', 'username') + input('Senha', 'password', 'password', 'current-password') + '<label class="remember-choice"><input name="remember" type="checkbox"><span>Manter conectado neste navegador por 30 dias</span></label><p class="note">Marque em um aparelho de uso pessoal. Você entrará direto enquanto a sessão estiver válida. Para salvar a senha, use a opção oferecida pelo navegador.</p><button type="submit">Entrar</button></form><a class="text-link" href="#" id="forgot">Primeiro acesso ou esqueci minha senha</a>', async data => {
-      await api('sign-in/email', { email: data.get('email').trim(), password: data.get('password'), rememberMe: data.get('remember') === 'on' });
+      const result = await api('sign-in/email', { email: data.get('email').trim(), password: data.get('password'), rememberMe: data.get('remember') === 'on' });
+      if (result?.twoFactorRedirect !== true) throw new Error('Não foi possível iniciar a confirmação do acesso. Tente entrar novamente.');
       challenge();
     });
     document.getElementById('forgot').onclick = e => { e.preventDefault(); resetRequest(); };
