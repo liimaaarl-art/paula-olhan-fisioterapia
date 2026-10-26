@@ -52,3 +52,18 @@ test('falha do servidor mantém alterações exportáveis e bloqueia confirmaç�
  const w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.eval('db.patients[0].name="Não perder";save()');
  await assert.rejects(w.OlhanCloud.flush());assert.equal(w.eval('db.patients[0].name'),'Não perder');assert.equal(w.OlhanCloud.status().blocked,true);assert.match(w.document.getElementById('cloud-status').textContent,/Exporte/);w.close();
 });
+
+test('suporte abre base vazia sem aguardar importação da administradora',async()=>{
+ const seed=await app(),legacy=JSON.parse(seed.window.localStorage.getItem('olhan-v1'));seed.window.close();const calls=[];
+ const empty={patients:[],team:[],appointments:[],records:[],invoices:[],files:[]};
+ const dom=await app({stored:legacy,setup(w){w.__OLHAN_CLOUD__={revision:0,data:null,role:'support'};},fetcher:async(url,options)=>{if(url==='/api/workspace')calls.push(JSON.parse(options.body));return {ok:true,json:async()=>url==='/api/workspace'?{revision:1,data:empty}:{configured:true,connected:true}};}});
+ const w=dom.window,before=w.localStorage.getItem('olhan-v1');w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));await tick();
+ assert.equal(calls.length,1);assert.equal(calls[0].action,'initialize');assert.equal(calls[0].data,undefined);assert.equal(w.localStorage.getItem('olhan-v1'),before);assert.ok(!w.document.body.textContent.includes('Aguardando importação pela administradora'));w.close();
+ const opened=await app({setup(w){w.__OLHAN_CLOUD__={revision:1,data:empty,role:'support'};}}),s=opened.window;s.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));s.go('patients');assert.equal(s.eval('db.patients.length'),0);assert.equal(s.OlhanCloud.status().ready,true);s.go('agenda');s.go('settings');s.close();
+});
+test('administradora pode importar cópia antiga depois de entrar sem bloquear o sistema',async()=>{
+ const seed=await app(),legacy=JSON.parse(seed.window.localStorage.getItem('olhan-v1'));seed.window.close();
+ const server={patients:[{id:'server-patient',name:'Servidor',status:'Ativo'}],team:[],appointments:[],records:[],invoices:[],files:[]};let written;
+ const dom=await app({stored:legacy,setup(w){w.__OLHAN_CLOUD__={revision:1,data:server,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace')written=JSON.parse(options.body);return {ok:true,json:async()=>url==='/api/workspace'?{revision:2}:{configured:true,connected:true}};}});
+ const w=dom.window,before=w.localStorage.getItem('olhan-v1');w.confirm=()=>true;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));assert.ok(w.document.getElementById('cloud-import-legacy'));w.go('patients');w.document.getElementById('cloud-import-legacy').click();await tick();await tick();assert.ok(written.data.patients.some(p=>p.id==='server-patient'));assert.ok(written.data.patients.some(p=>p.id===legacy.patients[0].id));assert.equal(w.localStorage.getItem('olhan-v1'),before);assert.equal(w.OlhanCloud.status().revision,2);w.close();
+});

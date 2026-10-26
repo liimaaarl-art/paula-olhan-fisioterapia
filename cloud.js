@@ -13,15 +13,15 @@
   const r=await fetch(url,{method,credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json();if(!r.ok){const e=Error(j.error||'O servidor não confirmou o salvamento.');e.status=r.status;throw e;}return j;
  }
- async function sendFile(file,patient,name,type){
+ async function sendFile(file,patient,name,type,migration=false){
   const encoded=typeof file==='string'?file:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
   const parts=/^data:([^;,]+);base64,(.*)$/.exec(encoded);if(!parts)throw Error('Anexo local inválido: '+name);
-  return api('/api/files',{patient,name,type:type||parts[1],base64:parts[2]});
+  return api('/api/files',{patient,name,type:type||parts[1],base64:parts[2],migration});
  }
  async function migrateFiles(data){
   for(const file of data.files){if(!String(file.data||'').startsWith('data:'))continue;
    status('Enviando anexo ao servidor: '+file.name);
-   const uploaded=await sendFile(file.data,file.patient,file.name,file.type);
+   const uploaded=await sendFile(file.data,file.patient,file.name,file.type,true);
    file.cloudId=uploaded.id;file.data=uploaded.data;file.type=uploaded.type;
   }return data;
  }
@@ -44,14 +44,50 @@
   try{await OlhanCloud.flush();status('Enviando arquivo ao servidor…');const item=await sendFile(file,pid,file.name,file.type);db.files.push({...item,cloudId:item.id,patient:pid,folder,date:today});persist();await OlhanCloud.flush();render();}
   catch(e){status(e.message||'Não foi possível salvar o arquivo.');}
  };
- if(ready){status('Dados carregados do servidor · versão '+revision);return;}
+ // Legacy data stays in the browser until the administrator explicitly imports
+ // it. Having a local copy must not prevent support from opening the server.
+ function mergeLegacy(server,local){
+  if(Array.isArray(server)&&Array.isArray(local)){
+   const keys=new Set(server.map(x=>x&&typeof x==='object'&&x.id?'id:'+x.id:'value:'+JSON.stringify(x)));
+   return [...server,...local.filter(x=>{const key=x&&typeof x==='object'&&x.id?'id:'+x.id:'value:'+JSON.stringify(x);if(keys.has(key))return false;keys.add(key);return true;})];
+  }
+  if(server&&local&&typeof server==='object'&&typeof local==='object'&&!Array.isArray(server)&&!Array.isArray(local)){
+   const out={};for(const key of new Set([...Object.keys(local),...Object.keys(server)])){
+    if(['__proto__','prototype','constructor'].includes(key))continue;
+    out[key]=key in server?(key in local?mergeLegacy(server[key],local[key]):server[key]):local[key];
+   }return out;
+  }
+  return server===undefined?local:server;
+ }
+ function offerLegacyImport(){
+  if(initial.role!=='admin'||!initial.hadLegacy)return;
+  const button=document.createElement('button');button.id='cloud-import-legacy';button.textContent='Importar cópia antiga';button.style.cssText=exportButton.style.cssText;bar.append(button);
+  button.onclick=async()=>{
+   if(!confirm('Adicionar os dados antigos deste navegador à base do servidor? Registros com o mesmo identificador serão mantidos conforme o servidor. A cópia antiga continuará intacta.'))return;
+   button.disabled=true;
+   const progress=document.createElement('dialog');progress.style.cssText='max-width:90vw;border:0;border-radius:12px;padding:28px';progress.textContent='Importando a cópia antiga. Aguarde a confirmação do servidor…';progress.addEventListener('cancel',e=>e.preventDefault());document.body.append(progress);progress.showModal();
+   try{await OlhanCloud.flush();const local=JSON.parse(localStorage.getItem('olhan-v1'));if(!local||!Array.isArray(local.patients)||!Array.isArray(local.files))throw Error('A cópia local não é válida.');
+    const imported=await migrateFiles(local),data=mergeLegacy(JSON.parse(JSON.stringify(db)),imported);
+    const result=await api('/api/workspace',{revision,data},'PUT');revision=result.revision;db=data;confirmed=JSON.stringify(data);savedSnapshot=confirmed;render();status('Cópia antiga adicionada. Registros já existentes foram preservados no servidor.');button.remove();
+   }catch(e){status(e.message+' A cópia antiga continua intacta.');button.disabled=false;}finally{progress.close();progress.remove();}
+  };
+ }
+ if(ready){status('Dados carregados do servidor · versão '+revision);offerLegacyImport();return;}
+ if(initial.role==='support'){
+  status('Abrindo o sistema com a base do servidor…');
+  const retry=document.createElement('button');retry.id='cloud-open-system';retry.textContent='Tentar abrir novamente';retry.style.cssText=exportButton.style.cssText;retry.hidden=true;bar.append(retry);
+  async function initialize(){retry.disabled=true;retry.hidden=true;
+   try{const result=await api('/api/workspace',{action:'initialize'});if(!result.data||result.revision<1)throw Error('O servidor ainda não confirmou a abertura.');location.reload();}
+   catch(e){status(e.message+' Seus dados antigos foram preservados.');retry.hidden=false;retry.disabled=false;}
+  }
+  retry.onclick=initialize;initialize();return;
+ }
  // Import must happen on the device containing the original records.
  const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:#f6f2ea;display:grid;place-items:center;padding:24px;overflow:auto';
  const panel=document.createElement('section');panel.style.cssText='max-width:600px;background:white;padding:32px;border-radius:16px;box-shadow:0 8px 40px #193c3820';overlay.append(panel);document.body.append(overlay);
  const title=document.createElement('h1');title.textContent='Seus dados, agora no servidor';panel.append(title);
  const copy=document.createElement('p');copy.textContent=initial.role==='admin'?(initial.hadLegacy?'Encontramos os dados deste navegador. Confira e importe a cópia original da Paula. Os dados antigos continuarão preservados neste aparelho.':'Abra este sistema no navegador que já contém os cadastros da Paula para importar os dados. Inicie vazio somente se ainda não houver cadastros.'): 'A Paula precisa abrir o sistema no navegador que contém seus cadastros e importar os dados. Depois, o suporte verá a mesma base.';panel.append(copy);
  const info=document.createElement('p');info.textContent=initial.hadLegacy?(db.patients?.length||0)+' pacientes · '+(db.appointments?.length||0)+' agendamentos · '+(db.files?.length||0)+' anexos neste navegador':'Sem cadastros locais para importar. Exemplos não serão enviados.';panel.append(info);
- if(initial.role!=='admin'){status('Aguardando importação pela administradora.');return;}
  const button=document.createElement('button');button.className='btn';button.textContent=initial.hadLegacy?'Importar estes dados para o servidor':'Iniciar uma base vazia';panel.append(button);
  button.onclick=async()=>{if(!confirm(initial.hadLegacy?'Importar os dados e anexos deste navegador para a base compartilhada da Olhan? A cópia antiga será preservada.':'Confirma iniciar uma base vazia? Se a Paula já tem dados em outro navegador, cancele e importe por ele.'))return;
   button.disabled=true;

@@ -29,3 +29,16 @@ test('envio de arquivo recusa origem externa, tipo e tamanho antes de tocar no R
  for(const body of [{name:'teste.html',patient:'p1',type:'text/html',base64:'YWJj'},{name:'teste.pdf',patient:'p1',type:'application/pdf',base64:'!bad!'}]){const r=response();await handler({method:'POST',olhanUser:user,headers,body},r);assert.equal(r.statusCode,400);}
  const foreign=response();await handler({method:'POST',olhanUser:user,headers:{...headers,origin:'https://foreign.test'},body:{}},foreign);assert.equal(foreign.statusCode,403);
 });
+
+test('suporte pode inicializar apenas uma base vazia, sem importar dados enviados no pedido',async()=>{
+ const calls=[];const empty={patients:[],team:[],appointments:[],records:[],invoices:[],files:[]};
+ const handler=workspaceHandler(()=>async(strings,...values)=>{calls.push({query:strings.join('?'),values});return strings.join('').includes('SELECT revision,data')?[{revision:1,data:empty}]:[];});
+ const r=response();await handler({method:'POST',olhanUser:{id:'support',role:'support'},headers,body:{action:'initialize',data:data()}},r);
+ assert.equal(r.statusCode,200);assert.equal(r.body.data.patients.length,0);
+ assert.match(calls[0].query,/ON CONFLICT\(id\) DO NOTHING/);
+ assert.equal(JSON.parse(calls[0].values[0]).patients.length,0);
+});
+test('inicialização preserva a base que já estava no servidor',async()=>{
+ const handler=workspaceHandler(()=>async strings=>strings.join('').includes('SELECT revision,data')?[{revision:12,data:data()}]:[]),r=response();
+ await handler({method:'POST',olhanUser:{id:'support',role:'support'},headers,body:{action:'initialize'}},r);assert.equal(r.body.revision,12);assert.equal(r.body.data.patients[0].id,'p1');
+});

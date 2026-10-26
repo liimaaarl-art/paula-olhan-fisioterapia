@@ -1,13 +1,29 @@
 import { protect } from '../lib/auth-guard.js';
 import { db, json } from '../lib/db.js';
-import { workspace, validateState } from '../lib/workspace.js';
+import { workspace, validateState, emptyWorkspace } from '../lib/workspace.js';
 import { sameOrigin } from '../lib/ai-session.js';
 export function workspaceHandler(sqlFactory=db) { return async (req,res)=>{
  if(!req.olhanUser)return json(res,401,{error:'Entre na sua conta.'});
  if(req.method==='GET'){try{return json(res,200,await workspace(sqlFactory()));}catch{return json(res,503,{error:'Não foi possível carregar os dados do servidor.'});}}
- if(req.method!=='PUT')return json(res,405,{error:'Método não permitido.'});
+ if(!['PUT','POST'].includes(req.method))return json(res,405,{error:'Método não permitido.'});
  if(!sameOrigin(req))return json(res,403,{error:'Origem não autorizada.'});
  if(!String(req.headers?.['content-type']||'').startsWith('application/json'))return json(res,415,{error:'Envie JSON.'});
+ if(req.method==='POST'){
+  if(req.body?.action!=='initialize')return json(res,400,{error:'Operação inválida.'});
+  if(!['admin','support'].includes(req.olhanUser.role))return json(res,403,{error:'Acesso não autorizado.'});
+  try{
+   const sql=sqlFactory();
+   // Empty initialization only. Existing data is never replaced, including a
+   // simultaneous initial import from the administrator's browser.
+   await sql`WITH created AS (
+    INSERT INTO public.olhan_workspace(id,revision,data,updated_by)
+    VALUES('olhan',1,${JSON.stringify(emptyWorkspace())}::jsonb,${req.olhanUser.id})
+    ON CONFLICT(id) DO NOTHING RETURNING revision,data,updated_by
+   ) INSERT INTO public.olhan_workspace_history(revision,data,updated_by)
+     SELECT revision,data,updated_by FROM created`;
+   return json(res,200,await workspace(sql));
+  }catch{return json(res,503,{error:'Não foi possível abrir a base do servidor. Tente novamente.'});}
+ }
  let data,revision;try{data=validateState(req.body?.data);revision=req.body?.revision;if(!Number.isSafeInteger(revision)||revision<0)throw Error('Versão inválida.');}catch(e){return json(res,400,{error:e.message});}
  if(revision===0 && req.olhanUser.role!=='admin')return json(res,403,{error:'A Paula precisa iniciar a migração dos dados.'});
  try {
