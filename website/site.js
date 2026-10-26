@@ -1,0 +1,27 @@
+(() => {
+ 'use strict';
+ const toggle=document.querySelector('.menu-toggle'),nav=document.getElementById('main-nav');
+ function closeMenu(){toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Abrir menu');nav.classList.remove('open');}
+ toggle.addEventListener('click',()=>{const open=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Fechar menu':'Abrir menu');nav.classList.toggle('open',open);});
+ nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',closeMenu));
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu();});
+ document.addEventListener('click',e=>{if(!e.target.closest('.site-header'))closeMenu();});
+ document.querySelectorAll('[data-dialog]').forEach(button=>button.addEventListener('click',()=>{const dialog=document.getElementById(button.dataset.dialog);dialog.showModal();document.body.classList.add('dialog-open');}));
+ document.querySelectorAll('dialog').forEach(dialog=>{
+  dialog.querySelector('.dialog-close').addEventListener('click',()=>dialog.close());
+  dialog.addEventListener('close',()=>document.body.classList.remove('dialog-open'));
+  dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
+ });
+ document.getElementById('year').textContent=new Date().getFullYear();
+ const form=document.getElementById('contact-form'),feedback=document.getElementById('contact-feedback');
+ form.addEventListener('submit',event=>{
+  event.preventDefault();if(!form.reportValidity())return;
+  const fields=new FormData(form),name=String(fields.get('name')||'').trim(),city=String(fields.get('city')||'').trim();
+  if(!name||!city)return;
+  const message=`Olá! Meu nome é ${name}. Vim pelo site da Olhan e procuro fisioterapia domiciliar para ${fields.get('for')}. Minha cidade e bairro: ${city}. Gostaria de conhecer o serviço e consultar a disponibilidade de uma avaliação.`;
+  const url='https://wa.me/5519999132996?text='+encodeURIComponent(message);
+  feedback.hidden=false;feedback.replaceChildren(document.createTextNode('Sua mensagem está pronta. Se o WhatsApp não abrir, '));
+  const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='clique aqui para continuar.';link.style.textDecoration='underline';feedback.append(link);
+  window.open(url,'_blank','noopener,noreferrer');
+ });
+})();
