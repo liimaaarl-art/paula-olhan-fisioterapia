@@ -13,4 +13,7 @@ await mkdir('public');
 for (const file of ['cloud.js','login.html','auth-ui.css','auth-ui.js','auth-account.js','care.css','care.js','bi.css','bi.js','schedule.js','assistant-actions.js','assistant.css','assistant.js','team-contracts.js']) await copyFile(file, 'public/' + file);
 
 
-if (process.env.VERCEL_ENV === 'production') await import('./provision-support.mjs');
+if (process.env.VERCEL_ENV === 'production') {
+ await import('./verify-private-storage.mjs');
+ await import('./provision-support.mjs');
+}
