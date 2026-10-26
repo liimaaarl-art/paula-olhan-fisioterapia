@@ -1,3 +1,4 @@
+import { hashPassword } from 'better-auth/crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -199,4 +200,11 @@ test('suporte tem senha própria, confirmação e revogação independente da ad
  const ctx=await auth.$context;const u=await ctx.internalAdapter.findUserByEmail(supportEmail);await ctx.internalAdapter.updateUser(u.user.id,{role:'revoked'});
  const before=mails.length;await call('request-password-reset',{email:supportEmail});assert.equal(mails.length,before);
  assert.equal((await call('get-session')).data,null);
+});
+
+test('senha inicial de suporte com oito caracteres funciona sem reduzir a regra de redefinição',async()=>{
+ const f=await fixture();const ctx=await f.auth.$context;const user=await ctx.internalAdapter.createUser({email:adminEmail,name:'Conta de teste',emailVerified:true,twoFactorEnabled:true,role:'admin'});
+ const pass='12345678';const hash=await hashPassword(pass);const now=new Date().toISOString();
+ f.database.prepare('INSERT INTO olhan_auth_account(id,accountId,providerId,userId,password,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?)').run('test-initial-account',user.id,'credential',user.id,hash,now,now);
+ const login=await f.request('sign-in/email',{email:adminEmail,password:pass});assert.equal(login.data.twoFactorRedirect,true);assert.equal((await f.verify()).status,200);
 });

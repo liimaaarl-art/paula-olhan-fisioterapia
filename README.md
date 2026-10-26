@@ -70,3 +70,13 @@ O assistente e a evolução usam a sessão individual já autenticada. Não há 
 Configure `OLHAN_SUPPORT_EMAIL` na Vercel com o e-mail do suporte. O primeiro acesso segue o mesmo fluxo de criação de senha e confirmação por e-mail da administradora, com perfil `support`. A conta da Paula permanece `admin`. Apenas os dois e-mails reservados, com perfil correspondente, podem acessar o aplicativo e as APIs existentes. O suporte pode operar os mesmos módulos atuais; não é uma conta de acesso restrito a diagnósticos. Não é feita assinatura, conclusão clínica ou alteração automática. Remover a variável de suporte revoga seu acesso na próxima requisição, mesmo com sessão existente. Uma conta previamente revogada não é reativada automaticamente.
 
 Nenhum dado clínico é migrado por esta alteração. Os cadastros continuam locais ao navegador: a conta de suporte em outro dispositivo não vê automaticamente os registros da Paula.
+
+## Dados e anexos no servidor (26/10/2026)
+
+Aplicar `migrations/20261026-cloud-storage.sql` antes do deploy. Os registros compartilhados passam a `olhan_workspace`, com histórico de versões e escrita condicional por revisão. Administradora e suporte veem a mesma base. Cópias antigas de `olhan-v1` não são apagadas. O primeiro acesso da administradora pede confirmação para importar o navegador original, incluindo os anexos. O suporte não pode inicializar a base. Nenhum paciente de demonstração deve ser importado quando não há dados locais.
+
+Os anexos ficam no R2 privado, até 3 MB por arquivo, com metadados no Neon. Download exige sessão individual e vínculo ao prontuário na versão compartilhada. Vídeos maiores requerem upload direto em etapa futura. Arquivos excluídos da versão atual deixam de ser acessíveis pela API; objetos históricos são preservados para recuperação administrativa.
+
+O navegador mantém apenas o estado aberto em memória e preferências de interface. O indicador informa salvamento pendente, confirmado ou conflito; falha não é anunciada como sucesso. Exporte a cópia pendente antes de recarregar em caso de falha ou conflito. A base antiga permanece preservada.
+
+`OLHAN_SUPPORT_INITIAL_PASSWORD` é uma configuração temporária e sensível, usada no build de produção para provisionar somente a conta reservada de suporte. Não modifica a administradora nem redefine senhas já criadas. Remover depois de confirmar a conta. A senha inicial solicitada pode ter oito caracteres; o fluxo normal de redefinição continua exigindo 12. A confirmação por e-mail permanece obrigatória.

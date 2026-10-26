@@ -37,3 +37,18 @@ test('configurações R2 verificam conexão sem solicitar chave e mantêm envios
  assert.ok(calls.some(c=>c.url==='/api/storage'&&!c.options.body));assert.equal(w.document.querySelector('[name="R2_SECRET_ACCESS_KEY"]'),null);w.close();
 });
 
+
+test('servidor confirma salvamento sem gravar dados novos no localStorage',async()=>{
+ const requests=[];let finish;
+ const dom=await app({setup(w){w.__OLHAN_CLOUD__={revision:1,data:null,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace'){requests.push(JSON.parse(options.body));return await new Promise(resolve=>finish=resolve);}return {ok:true,json:async()=>({configured:true,connected:true})};}});
+ const w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
+ const before=w.localStorage.getItem('olhan-v1');w.eval('db.patients[0].name="Teste no servidor";save()');
+ assert.match(w.document.getElementById('cloud-status').textContent,/Salvando/);assert.equal(w.localStorage.getItem('olhan-v1'),before);
+ finish({ok:true,json:async()=>({revision:2})});await w.OlhanCloud.flush();
+ assert.equal(requests[0].data.patients[0].name,'Teste no servidor');assert.equal(w.localStorage.getItem('olhan-v1'),before);assert.match(w.document.getElementById('cloud-status').textContent,/Salvo no servidor/);w.close();
+});
+test('falha do servidor mantém alterações exportáveis e bloqueia confirmação falsa',async()=>{
+ const dom=await app({setup(w){w.__OLHAN_CLOUD__={revision:1,data:null,role:'admin'};},fetcher:async(url)=>({ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Conflito de revisão'}:{configured:true,connected:true}})});
+ const w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.eval('db.patients[0].name="Não perder";save()');
+ await assert.rejects(w.OlhanCloud.flush());assert.equal(w.eval('db.patients[0].name'),'Não perder');assert.equal(w.OlhanCloud.status().blocked,true);assert.match(w.document.getElementById('cloud-status').textContent,/Exporte/);w.close();
+});
