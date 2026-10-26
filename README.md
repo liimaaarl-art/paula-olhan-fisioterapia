@@ -80,3 +80,9 @@ Os anexos ficam no R2 privado, até 3 MB por arquivo, com metadados no Neon. Dow
 O navegador mantém apenas o estado aberto em memória e preferências de interface. O indicador informa salvamento pendente, confirmado ou conflito; falha não é anunciada como sucesso. Exporte a cópia pendente antes de recarregar em caso de falha ou conflito. A base antiga permanece preservada.
 
 `OLHAN_SUPPORT_INITIAL_PASSWORD` é uma configuração temporária e sensível, usada no build de produção para provisionar somente a conta reservada de suporte. Não modifica a administradora nem redefine senhas já criadas. Remover depois de confirmar a conta. A senha inicial solicitada pode ter oito caracteres; o fluxo normal de redefinição continua exigindo 12. A confirmação por e-mail permanece obrigatória.
+
+## Abertura direta do suporte
+
+O suporte entra sem aguardar a importação da administradora. Na ausência de base compartilhada, inicializa somente uma base vazia no servidor, de forma atômica e sem substituir uma base existente. Os exemplos e a cópia antiga do navegador não são enviados automaticamente.
+
+Depois da inicialização, a administradora que tem uma cópia local encontra **Importar cópia antiga** no indicador de salvamento. A importação adiciona registros e preserva os identificadores já presentes no servidor; a cópia original continua intacta. A importação bloqueia temporariamente a edição apenas durante a confirmação do envio.

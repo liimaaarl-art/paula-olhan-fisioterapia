@@ -30,7 +30,7 @@ export function fileHandler({sqlFactory=db,config=r2Config,clientFactory=r2Clien
   const state=await sql`SELECT data FROM public.olhan_workspace WHERE id='olhan'`;
   const patientExists=state[0]?.data?.patients?.some(p=>p.id===b.patient);
   // On first migration only the administrator may upload before initial state.
-  if(!patientExists && !(req.olhanUser.role==='admin'&&!state.length))return json(res,404,{error:'Salve o cadastro do paciente antes de anexar.'});
+  if(!patientExists && !(req.olhanUser.role==='admin'&&(!state.length||b.migration===true)))return json(res,404,{error:'Salve o cadastro do paciente antes de anexar.'});
   const id=randomUUID(),key='olhan/private/'+id;
   client=clientFactory(cfg);await client.send(new PutObjectCommand({Bucket:cfg.bucket,Key:key,Body:bytes,ContentType:b.type}),{abortSignal:AbortSignal.timeout(20000)});
   await sql`INSERT INTO public.olhan_cloud_files(id,patient_id,object_key,name,mime,size,uploaded_by) VALUES(${id}::uuid,${b.patient},${key},${b.name},${b.type},${bytes.length},${req.olhanUser.id})`;

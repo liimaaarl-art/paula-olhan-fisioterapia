@@ -18,5 +18,9 @@ test('Postgres isolado: escrita versionada preserva dados e bloqueia sessão des
   assert.equal((await put(1,'Aba antiga')).code,409);
   const rows=await c.query('SELECT revision,data FROM olhan_workspace');assert.equal(rows.rows[0].data.patients[0].name,'Segundo');
   assert.equal((await c.query('SELECT count(*)::int AS n FROM olhan_workspace_history')).rows[0].n,2);
+  const reopened={status(s){this.code=s;return this},setHeader(){return this},end(s){this.body=JSON.parse(s)}};
+  await handler({method:'POST',headers:{origin:'https://olhan.test',host:'olhan.test','content-type':'application/json'},olhanUser:{id,role:'support'},body:{action:'initialize'}},reopened);
+  assert.equal(reopened.body.revision,2);assert.equal(reopened.body.data.patients[0].name,'Segundo');
+  assert.equal((await c.query('SELECT count(*)::int AS n FROM olhan_workspace_history')).rows[0].n,2);
  }finally{await c.query('ROLLBACK');c.release();await pool.end();}
 });
