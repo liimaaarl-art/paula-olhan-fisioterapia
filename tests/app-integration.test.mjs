@@ -33,7 +33,7 @@ test('configurações R2 verificam conexão sem solicitar chave e mantêm envios
  const w=dom.window;w.go('settings');const initial=w.localStorage.getItem('olhan-v1');
  const button=w.document.getElementById('storage-check');assert.ok(button);button.click();assert.equal(button.disabled,true);assert.match(w.document.getElementById('storage-status').textContent,/Verificando/);
  answer({ok:true,json:async()=>({configured:true,connected:true,uploadsEnabled:false,accessEnabled:false})});await tick();
- assert.match(w.document.getElementById('storage-status').textContent,/R2 conectado.*aguardam login/);assert.equal(button.disabled,false);assert.equal(w.localStorage.getItem('olhan-v1'),initial);
+ assert.match(w.document.getElementById('storage-status').textContent,/R2 conectado.*Anexos privados/);assert.equal(button.disabled,false);assert.equal(w.localStorage.getItem('olhan-v1'),initial);
  assert.ok(calls.some(c=>c.url==='/api/storage'&&!c.options.body));assert.equal(w.document.querySelector('[name="R2_SECRET_ACCESS_KEY"]'),null);w.close();
 });
 
@@ -44,7 +44,7 @@ test('servidor confirma salvamento sem gravar dados novos no localStorage',async
  const w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
  const before=w.localStorage.getItem('olhan-v1');w.eval('db.patients[0].name="Teste no servidor";save()');
  assert.match(w.document.getElementById('cloud-status').textContent,/Salvando/);assert.equal(w.localStorage.getItem('olhan-v1'),before);
- finish({ok:true,json:async()=>({revision:2})});await w.OlhanCloud.flush();
+ await tick();finish({ok:true,json:async()=>({revision:2})});await w.OlhanCloud.flush();
  assert.equal(requests[0].data.patients[0].name,'Teste no servidor');assert.equal(w.localStorage.getItem('olhan-v1'),before);assert.match(w.document.getElementById('cloud-status').textContent,/Salvo no servidor/);w.close();
 });
 test('falha do servidor mantém alterações exportáveis e bloqueia confirmação falsa',async()=>{

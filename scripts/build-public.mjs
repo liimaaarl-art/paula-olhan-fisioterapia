@@ -1,6 +1,8 @@
 import { mkdir, copyFile, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 if (process.env.OLHAN_AUTH_SELF_TEST === '1' && process.env.VERCEL_ENV === 'preview') {
+  const suite=spawnSync('npm',['test'],{stdio:'inherit',env:{...process.env,OLHAN_AUTH_SELF_TEST:'0'}});
+  if(suite.status!==0)throw new Error('Application test suite failed');
   const check = spawnSync(process.execPath, ['--test', 'tests/auth-postgres.test.mjs', 'tests/cloud-postgres.test.mjs'], { stdio: 'inherit', env: { ...process.env, AUTH_TEST_DATABASE_URL: process.env.DATABASE_URL } });
   if (check.status !== 0) throw new Error('Isolated Postgres authentication verification failed');
 }
