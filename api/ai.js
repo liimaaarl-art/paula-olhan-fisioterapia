@@ -2,19 +2,18 @@ import { protect } from '../lib/auth-guard.js';
 import { generateText, Output, transcribe } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
 import { json } from '../lib/db.js';
-import { authorized,audioFromBody,validateText,evolutionSchema,assistantSchema,extractionPrompt,assistantPrompt } from '../lib/ai-policy.js';
+import { audioFromBody,validateText,evolutionSchema,assistantSchema,extractionPrompt,assistantPrompt } from '../lib/ai-policy.js';
 
-import {sessionAuthorized,sameOrigin} from '../lib/ai-session.js';
+import {sameOrigin} from '../lib/ai-session.js';
 export const maxDuration=120;
 const rates=new Map();
 export async function handler(req,res){
-  const configured=!!(process.env.GROQ_API_KEY&&process.env.OLHAN_AI_ACCESS_CODE);
-  if(req.method==='GET')return json(res,200,{configured,connected:configured&&sessionAuthorized(req,process.env.OLHAN_AI_ACCESS_CODE),provider:'Groq',maxAudioBytes:2500000});
+  if (!req.olhanUser) return json(res,401,{error:'Entre na sua conta para continuar.'});
+  const configured=!!process.env.GROQ_API_KEY;
+  if(req.method==='GET')return json(res,200,{configured,connected:configured,provider:'Groq',maxAudioBytes:2500000});
   if(req.method!=='POST'){res.setHeader('Allow','GET, POST');return json(res,405,{error:'Método não permitido.'});}
   if(!configured)return json(res,503,{error:'A IA aguarda configuração no servidor. Os demais recursos do sistema continuam disponíveis.',code:'AI_NOT_CONFIGURED'});
-  const bearer=authorized(req,process.env.OLHAN_AI_ACCESS_CODE);
-  if(!bearer&&!sessionAuthorized(req,process.env.OLHAN_AI_ACCESS_CODE))return json(res,401,{error:'Conecte a IA com o código de acesso definido para a Paula.'});
-  if(!bearer&&!sameOrigin(req))return json(res,403,{error:'Origem não autorizada.'});
+  if(!sameOrigin(req))return json(res,403,{error:'Origem não autorizada.'});
   const origin=req.headers?.origin;const host=req.headers?.host;
   try{if(origin&&new URL(origin).host!==host)return json(res,403,{error:'Origem não autorizada.'});}catch{return json(res,403,{error:'Origem inválida.'});}
   if(!String(req.headers?.['content-type']||'').startsWith('application/json'))return json(res,415,{error:'Envie JSON.'});
@@ -36,3 +35,4 @@ export async function handler(req,res){
 }
 
 export default protect(handler);
+

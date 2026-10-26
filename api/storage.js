@@ -28,10 +28,11 @@ export function storageHandler({ config = r2Config, probe = probeR2, now = Date.
     }
     return json(res, 200, {
       configured: true, connected: cache.connected,
-      uploadsEnabled: false, accessEnabled: false,
-      reason: cache.connected ? 'INDIVIDUAL_AUTH_REQUIRED' : 'CONNECTION_FAILED',
+      uploadsEnabled: cache.connected, accessEnabled: cache.connected,
+      reason: cache.connected ? 'PRIVATE_STORAGE_READY' : 'CONNECTION_FAILED',
     });
   };
 }
 
 export default protect(storageHandler());
+

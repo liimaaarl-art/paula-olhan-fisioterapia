@@ -232,7 +232,7 @@
   'use strict';
   const previousSettings = window.settings;
   window.settings = function () {
-    return previousSettings() + `<section class="card" style="margin-top:16px" aria-labelledby="storage-title"><div class="cardhead"><div><h2 id="storage-title">Vídeos privados · Cloudflare R2</h2><p>Verifique a conexão do armazenamento.</p></div></div><div class="record"><p id="storage-status" role="status" aria-live="polite">Conexão ainda não verificada.</p><button type="button" class="btn secondary small" id="storage-check" onclick="olhanCheckStorage()">Verificar conexão R2</button></div><p class="note">O envio e o acesso aos vídeos online aguardam o login individual e as permissões da equipe. Os anexos atuais continuam neste navegador.</p></section>`;
+    return previousSettings() + `<section class="card" style="margin-top:16px" aria-labelledby="storage-title"><div class="cardhead"><div><h2 id="storage-title">Vídeos privados · Cloudflare R2</h2><p>Verifique a conexão do armazenamento.</p></div></div><div class="record"><p id="storage-status" role="status" aria-live="polite">Conexão ainda não verificada.</p><button type="button" class="btn secondary small" id="storage-check" onclick="olhanCheckStorage()">Verificar conexão R2</button></div><p class="note">Os arquivos ficam no armazenamento privado e exigem login. Limite de 3 MB por arquivo. A cópia antiga continua neste navegador.</p></section>`;
   };
   window.olhanCheckStorage = async function () {
     const button = document.getElementById('storage-check');
@@ -247,10 +247,11 @@
       status.textContent = !result.configured
         ? 'Configuração do R2 incompleta no servidor.'
         : result.connected
-          ? 'R2 conectado. Envio e acesso aos vídeos aguardam login individual e permissões.'
+          ? 'R2 conectado. Anexos privados disponíveis para sua conta, até 3 MB por arquivo.'
           : 'Credenciais cadastradas, mas a conexão não foi confirmada. Confira o bucket e as permissões da chave.';
     } catch {
       status.textContent = 'Não foi possível verificar o R2 agora. Tente novamente.';
     } finally { button.disabled = false; }
   };
 })();
+

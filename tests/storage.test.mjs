@@ -32,7 +32,7 @@ test('status confirma conexão com cache e bloqueia escrita mesmo com sessão de
   const results = await Promise.all(Array.from({ length: 3 }, async () => { const r = res(); await handler({ method: 'GET' }, r); return r; }));
   assert.equal(calls, 1);
   for (const r of results) {
-    assert.deepEqual(r.body, { configured: true, connected: true, uploadsEnabled: false, accessEnabled: false, reason: 'INDIVIDUAL_AUTH_REQUIRED' });
+    assert.deepEqual(r.body, { configured: true, connected: true, uploadsEnabled: true, accessEnabled: true, reason: 'PRIVATE_STORAGE_READY' });
     assert.equal(r.headers['Cache-Control'], 'no-store');
     assert.ok(!JSON.stringify(r.body).includes('fake-'));
   }
@@ -51,3 +51,4 @@ test('configuração ausente não acessa R2; erro do provedor nunca vaza na resp
   const r = res(); await storageHandler({ config: () => r2Config(env), probe: async () => { throw new Error('secret-key-signed-url'); } })({ method: 'GET' }, r);
   assert.equal(r.body.reason, 'CONNECTION_FAILED'); assert.ok(!JSON.stringify(r.body).includes('secret-key'));
 });
+

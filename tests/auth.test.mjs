@@ -1,3 +1,4 @@
+import { hashPassword } from 'better-auth/crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -170,4 +171,40 @@ test('proteção do servidor falha fechada e não aceita cookie compartilhado de
   await protect(handler,async()=>null)({headers:{cookie:'__Host-olhan-ai=fake'}},r);assert.equal(r.code,401);assert.equal(ran,false);
   r=res();await protect(handler,async()=>{throw Error('secret')})({headers:{}},r);assert.equal(r.code,503);assert.ok(!r.body.includes('secret'));
   assert.throws(()=>smtpConfig({SMTP_HOST:'x',SMTP_USER:'x',SMTP_PASS:'x',SMTP_FROM:'x',SMTP_PORT:'25'}));
+});
+
+
+test('suporte tem senha própria, confirmação e revogação independente da administradora',async()=>{
+ const database=new DatabaseSync(':memory:'),mails=[];
+ const supportEmail='support@example.test';
+ const auth=createAuth({database,secret:'a-test-secret-that-is-longer-than-32-characters',baseURL,adminEmail,supportEmail,rateLimit:false,sendMail:async m=>mails.push(m)});
+ await (await getMigrations(auth.options)).runMigrations();
+ const jar=new Map();
+ async function call(path,body){
+  const cookie=[...jar].map(([k,v])=>k+'='+v).join('; ');
+  const r=await authRequest(new Request(baseURL+'/api/auth/'+path,{method:body===undefined?'GET':'POST',headers:{origin:baseURL,cookie,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),auth,{baseURL,adminEmail,supportEmail});
+  for(const c of r.headers.getSetCookie()){const pair=c.split(';')[0],at=pair.indexOf('=');jar.set(pair.slice(0,at),pair.slice(at+1));}
+  return {status:r.status,data:await r.json()};
+ }
+ await call('request-password-reset',{email:supportEmail});
+ assert.equal(mails.at(-1).to,supportEmail);
+ assert.equal(database.prepare('select role from olhan_auth_user where email=?').get(supportEmail).role,'support');
+ const token=new URLSearchParams(new URL(mails.at(-1).link).hash.slice(1)).get('reset');
+ assert.equal((await call('reset-password',{token,newPassword:password})).status,200);
+ assert.equal((await call('sign-in/email',{email:supportEmail,password})).data.twoFactorRedirect,true);
+ assert.equal((await call('get-session')).data,null);
+ assert.equal((await call('two-factor/verify-otp',{code:mails.at(-1).code,trustDevice:false})).status,200);
+ assert.equal((await call('get-session')).data.user.role,'support');
+ const headers=new Headers({cookie:[...jar].map(([k,v])=>k+'='+v).join('; ')});
+ assert.equal(await adminSession(headers,auth,adminEmail,''),null);
+ const ctx=await auth.$context;const u=await ctx.internalAdapter.findUserByEmail(supportEmail);await ctx.internalAdapter.updateUser(u.user.id,{role:'revoked'});
+ const before=mails.length;await call('request-password-reset',{email:supportEmail});assert.equal(mails.length,before);
+ assert.equal((await call('get-session')).data,null);
+});
+
+test('senha inicial de suporte com oito caracteres funciona sem reduzir a regra de redefinição',async()=>{
+ const f=await fixture();const ctx=await f.auth.$context;const user=await ctx.internalAdapter.createUser({email:adminEmail,name:'Conta de teste',emailVerified:true,twoFactorEnabled:true,role:'admin'});
+ const pass='12345678';const hash=await hashPassword(pass);const now=new Date().toISOString();
+ f.database.prepare('INSERT INTO olhan_auth_account(id,accountId,providerId,userId,password,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?)').run('test-initial-account',user.id,'credential',user.id,hash,now,now);
+ const login=await f.request('sign-in/email',{email:adminEmail,password:pass});assert.equal(login.data.twoFactorRedirect,true);assert.equal((await f.verify()).status,200);
 });
