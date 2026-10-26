@@ -171,3 +171,32 @@ test('proteção do servidor falha fechada e não aceita cookie compartilhado de
   r=res();await protect(handler,async()=>{throw Error('secret')})({headers:{}},r);assert.equal(r.code,503);assert.ok(!r.body.includes('secret'));
   assert.throws(()=>smtpConfig({SMTP_HOST:'x',SMTP_USER:'x',SMTP_PASS:'x',SMTP_FROM:'x',SMTP_PORT:'25'}));
 });
+
+
+test('suporte tem senha própria, confirmação e revogação independente da administradora',async()=>{
+ const database=new DatabaseSync(':memory:'),mails=[];
+ const supportEmail='support@example.test';
+ const auth=createAuth({database,secret:'a-test-secret-that-is-longer-than-32-characters',baseURL,adminEmail,supportEmail,rateLimit:false,sendMail:async m=>mails.push(m)});
+ await (await getMigrations(auth.options)).runMigrations();
+ const jar=new Map();
+ async function call(path,body){
+  const cookie=[...jar].map(([k,v])=>k+'='+v).join('; ');
+  const r=await authRequest(new Request(baseURL+'/api/auth/'+path,{method:body===undefined?'GET':'POST',headers:{origin:baseURL,cookie,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),auth,{baseURL,adminEmail,supportEmail});
+  for(const c of r.headers.getSetCookie()){const pair=c.split(';')[0],at=pair.indexOf('=');jar.set(pair.slice(0,at),pair.slice(at+1));}
+  return {status:r.status,data:await r.json()};
+ }
+ await call('request-password-reset',{email:supportEmail});
+ assert.equal(mails.at(-1).to,supportEmail);
+ assert.equal(database.prepare('select role from olhan_auth_user where email=?').get(supportEmail).role,'support');
+ const token=new URLSearchParams(new URL(mails.at(-1).link).hash.slice(1)).get('reset');
+ assert.equal((await call('reset-password',{token,newPassword:password})).status,200);
+ assert.equal((await call('sign-in/email',{email:supportEmail,password})).data.twoFactorRedirect,true);
+ assert.equal((await call('get-session')).data,null);
+ assert.equal((await call('two-factor/verify-otp',{code:mails.at(-1).code,trustDevice:false})).status,200);
+ assert.equal((await call('get-session')).data.user.role,'support');
+ const headers=new Headers({cookie:[...jar].map(([k,v])=>k+'='+v).join('; ')});
+ assert.equal(await adminSession(headers,auth,adminEmail,''),null);
+ const ctx=await auth.$context;const u=await ctx.internalAdapter.findUserByEmail(supportEmail);await ctx.internalAdapter.updateUser(u.user.id,{role:'revoked'});
+ const before=mails.length;await call('request-password-reset',{email:supportEmail});assert.equal(mails.length,before);
+ assert.equal((await call('get-session')).data,null);
+});

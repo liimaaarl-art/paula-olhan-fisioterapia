@@ -1,9 +1,23 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';
-import {handler as access} from '../api/ai-access.js';import {handler as ai} from '../api/ai.js';
-import {COOKIE,SESSION_SECONDS,issueSession,sessionAuthorized,sessionCookie} from '../lib/ai-session.js';
-const secret='test-code-with-enough-entropy';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { handler as ai } from '../api/ai.js';
+import { handler as access } from '../api/ai-access.js';
+import { issueSession, COOKIE } from '../lib/ai-session.js';
 function response(){return {statusCode:0,headers:{},status(s){this.statusCode=s;return this},setHeader(k,v){this.headers[k]=v},end(s){this.body=JSON.parse(s)}};}
-const req=(method,body)=>({method,body,headers:{host:'olhan.test',origin:'https://olhan.test','content-type':'application/json'}});
-test('sessão assinada expira, rejeita adulteração e é invalidada por troca de código',()=>{const now=1800000000000,token=issueSession(secret,now);const request={headers:{cookie:COOKIE+'='+token}};assert.equal(sessionAuthorized(request,secret,now),true);assert.equal(sessionAuthorized(request,secret,now+SESSION_SECONDS*1000),false);assert.equal(sessionAuthorized(request,'another-code',now),false);assert.equal(sessionAuthorized({headers:{cookie:COOKIE+'='+token.slice(0,-1)+'!'}},secret,now),false);assert.equal(sessionAuthorized({headers:{cookie:COOKIE+'=invalid'}},secret,now),false);assert.match(sessionCookie(token),/HttpOnly; Secure; SameSite=Strict; Max-Age=2592000/);assert.ok(!sessionCookie(token,false).includes('Max-Age'));});
-test('conexão persistente valida código, retorna só estado e autentica API sem bearer',async()=>{process.env.GROQ_API_KEY='provider-key-test';process.env.OLHAN_AI_ACCESS_CODE=secret;try{const r=response();await access(req('POST',{code:secret,remember:true}),r);assert.equal(r.statusCode,200);assert.deepEqual(r.body,{connected:true});assert.ok(!JSON.stringify(r.body).includes(secret));const cookie=r.headers['Set-Cookie'].split(';')[0];const status=response();await ai({method:'GET',headers:{cookie}},status);assert.equal(status.body.connected,true);const post=response();await ai({...req('POST',{mode:'invalid'}),headers:{...req('POST').headers,cookie}},post);assert.equal(post.statusCode,400);const foreign=response();await ai({method:'POST',body:{},headers:{host:'olhan.test',origin:'https://foreign.test',cookie}},foreign);assert.equal(foreign.statusCode,403);const logout=response();await access(req('DELETE'),logout);assert.match(logout.headers['Set-Cookie'],/Max-Age=0/);}finally{delete process.env.GROQ_API_KEY;delete process.env.OLHAN_AI_ACCESS_CODE;}});
-test('login rejeita origem externa, código incorreto e servidor sem credenciais',async()=>{process.env.GROQ_API_KEY='provider-key-test';process.env.OLHAN_AI_ACCESS_CODE=secret;try{const invalid=response();await access(req('POST',{code:'wrong'}),invalid);assert.equal(invalid.statusCode,401);assert.equal(invalid.headers['Set-Cookie'],undefined);const foreign=response();await access({...req('POST',{code:secret}),headers:{host:'olhan.test',origin:'https://foreign.test'}},foreign);assert.equal(foreign.statusCode,403);delete process.env.GROQ_API_KEY;const missing=response();await access(req('POST',{code:secret}),missing);assert.equal(missing.statusCode,503);}finally{delete process.env.GROQ_API_KEY;delete process.env.OLHAN_AI_ACCESS_CODE;}});
+const headers={origin:'https://olhan.test',host:'olhan.test','content-type':'application/json'};
+test('login individual libera IA sem código e sem cookie adicional',async()=>{
+  process.env.GROQ_API_KEY='fake-provider-secret';delete process.env.OLHAN_AI_ACCESS_CODE;
+  try {
+    const status=response();await ai({method:'GET',olhanUser:{id:'owner'},headers},status);
+    assert.equal(status.body.connected,true);assert.equal(status.body.configured,true);
+    assert.ok(!JSON.stringify(status.body).includes('fake-provider-secret'));
+    const invalid=response();await ai({method:'POST',olhanUser:{id:'support'},headers,body:{mode:'invalid'}},invalid);assert.equal(invalid.statusCode,400);
+    const foreign=response();await ai({method:'POST',olhanUser:{id:'owner'},headers:{...headers,origin:'https://foreign.test'},body:{}},foreign);assert.equal(foreign.statusCode,403);
+    const legacy=response();await access({method:'POST',olhanUser:{id:'owner'},headers,body:{}},legacy);assert.equal(legacy.statusCode,200);assert.match(legacy.headers['Set-Cookie'],/Max-Age=0/);
+  }finally{delete process.env.GROQ_API_KEY;}
+});
+test('cookie e bearer legados não substituem sessão individual',async()=>{
+ const req={method:'GET',headers:{...headers,authorization:'Bearer old-code',cookie:COOKIE+'='+issueSession('old-code')}};
+ const status=response();await ai(req,status);assert.equal(status.statusCode,401);
+ const legacy=response();await access({...req,method:'POST'},legacy);assert.equal(legacy.statusCode,401);
+});

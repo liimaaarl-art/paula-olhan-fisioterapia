@@ -61,3 +61,12 @@ Configurações → Conta e senha permite trocar a senha e sair. Redefinir a sen
 Os dados clínicos continuam neste navegador; esta entrega não faz sincronização nem concede acesso de familiares/equipe. O R2 permanece sem envio/leitura de arquivos clínicos até haver autorização por paciente no servidor. Faça backup antes de mudar de dispositivo.
 
 Validação: `npm test`. Para testar Postgres em banco isolado, aplique a migração e execute `AUTH_TEST_DATABASE_URL=... node --test tests/auth-postgres.test.mjs`. O teste usa apenas e-mail fictício e entrega de mensagens em memória; nunca use esse teste em produção. Em um preview com banco isolado, `OLHAN_AUTH_SELF_TEST=1` executa essa validação durante o build sem enviar e-mails reais.
+
+
+## IA pelo login e conta de suporte
+
+O assistente e a evolução usam a sessão individual já autenticada. Não há código adicional de IA e a chave Groq continua exclusivamente no servidor. `OLHAN_AI_ACCESS_CODE` não é mais necessário. Sem sessão, cookies antigos de IA ou bearer não concedem acesso.
+
+Configure `OLHAN_SUPPORT_EMAIL` na Vercel com o e-mail do suporte. O primeiro acesso segue o mesmo fluxo de criação de senha e confirmação por e-mail da administradora, com perfil `support`. A conta da Paula permanece `admin`. Apenas os dois e-mails reservados, com perfil correspondente, podem acessar o aplicativo e as APIs existentes. O suporte pode operar os mesmos módulos atuais; não é uma conta de acesso restrito a diagnósticos. Não é feita assinatura, conclusão clínica ou alteração automática. Remover a variável de suporte revoga seu acesso na próxima requisição, mesmo com sessão existente. Uma conta previamente revogada não é reativada automaticamente.
+
+Nenhum dado clínico é migrado por esta alteração. Os cadastros continuam locais ao navegador: a conta de suporte em outro dispositivo não vê automaticamente os registros da Paula.
