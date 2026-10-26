@@ -25,3 +25,14 @@
   window.open(url,'_blank','noopener,noreferrer');
  });
 })();
+
+(() => {
+ const track=document.getElementById('reviews-track');
+ if(!track)return;
+ const prev=document.querySelector('.review-prev'),next=document.querySelector('.review-next');
+ const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+ const update=()=>{prev.disabled=track.scrollLeft<2;next.disabled=track.scrollLeft+track.clientWidth>=track.scrollWidth-2;};
+ const move=direction=>track.scrollBy({left:direction*(track.querySelector('.review-card').getBoundingClientRect().width+24),behavior:reduced.matches?'instant':'smooth'});
+ prev.addEventListener('click',()=>move(-1));next.addEventListener('click',()=>move(1));
+ track.addEventListener('scroll',update,{passive:true});window.addEventListener('resize',update);window.addEventListener('load',update);update();
+})();
