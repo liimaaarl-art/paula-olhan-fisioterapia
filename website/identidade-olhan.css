@@ -1,6 +1,6 @@
 /* Identidade Olhan: cores do manual e fontes locais. Garet Book e Heavy são
    disponibilizadas gratuitamente para uso na web pela Type Forward/Spacetype.
-   Bodoni Moda é uma alternativa provisória para a fonte de títulos Larisa. */
+   Lora mantém o desenho clássico dos títulos com traços mais legíveis. */
 @font-face {
   font-family: 'Garet';
   src: url('assets/fonts/Garet-Book.woff') format('woff');
@@ -16,10 +16,10 @@
   font-display: swap;
 }
 @font-face {
-  font-family: 'Bodoni Moda';
-  src: url('assets/fonts/BodoniModa.woff') format('woff');
+  font-family: 'Lora';
+  src: url('assets/fonts/Lora.woff') format('woff');
   font-style: normal;
-  font-weight: 400 900;
+  font-weight: 400 700;
   font-display: swap;
 }
 
@@ -36,7 +36,7 @@
   --sage-wash: #e6efec;
   --sage-mist: #f1f6f4;
   --peach-wash: #f8e9df;
-  --serif: 'Larisa', 'Bodoni Moda', Georgia, serif;
+  --serif: 'Lora', Georgia, serif;
   --sans: 'Garet', Arial, sans-serif;
 }
 
@@ -45,10 +45,10 @@ button, input, select, textarea { font-family: var(--sans); }
 h1, h2, .founder-name > span, .team-portraits figcaption,
 .contact-form h3, .step-number, .method-pillars article > span {
   font-family: var(--serif);
-  font-weight: 400;
-  letter-spacing: -.035em;
+  font-weight: 500;
+  letter-spacing: -.025em;
 }
-h1 em, h2 em { color: var(--deep); font-style: normal; font-weight: 400; }
+h1 em, h2 em { color: var(--deep); font-style: normal; font-weight: inherit; }
 p { color: var(--muted); }
 button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, summary:focus-visible {
@@ -161,7 +161,7 @@ select:focus-visible, summary:focus-visible {
 
 @media (max-width: 700px) {
   .site-header nav { background: var(--cream); }
-  .hero h1 { font-size: clamp(42px, 11vw, 68px); line-height: 1.08; letter-spacing: -.04em; }
+  .hero h1 { font-size: clamp(40px, 10.5vw, 64px); line-height: 1.12; letter-spacing: -.025em; }
   .hero .eyebrow { font-size: 9px; line-height: 1.5; }
   .hero .hero-support { font-size: 14px !important; }
   .help-grid p { font-size: 14px !important; }
@@ -169,6 +169,6 @@ select:focus-visible, summary:focus-visible {
   .patient-content h1 { font-size: clamp(38px, 10vw, 48px); }
 }
 @media (max-width: 370px) {
-  .hero h1 { font-size: 42px; }
+  .hero h1 { font-size: 40px; }
   .hero .eyebrow { font-size: 9px; }
 }
