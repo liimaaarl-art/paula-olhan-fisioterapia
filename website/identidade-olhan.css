@@ -159,6 +159,22 @@ select:focus-visible, summary:focus-visible {
 .contact-form input, .contact-form select { font-size: 14px; }
 .faq-list summary { font-size: 14px; }
 
+/* Mais presença da paleta original, com contraste para os textos. */
+.hero h1 em, .section-intro h2 em, .founder-copy h2 em,
+.contact-copy h2 em { color: #9a512d; }
+.hero-stamp { border-left: 4px solid var(--orange); }
+.care-strip { background: var(--green); border-color: #5e908d; }
+.strip-inner > span, .strip-inner svg { color: #102c2b; }
+.help-grid .icon-box { background: var(--green); color: #102c2b; }
+.help-grid .icon-box.orange { background: var(--orange); color: #183633; }
+.journey-steps .step-number { background: var(--green); color: #102c2b; }
+.journey-steps li:nth-child(even) .step-number { background: var(--orange); color: #183633; }
+.founder { background: #dcebe7; }
+.care-on-the-way { background: #f7e5da; border: 1px solid #f2d4c3; }
+.contact-form { border-top: 4px solid var(--green); }
+.patient-status { background: var(--peach-wash); border-color: #e8bc9f; }
+.footer { background: #d1e6e2; }
+
 @media (max-width: 700px) {
   .site-header nav { background: var(--cream); }
   .hero h1 { font-size: clamp(40px, 10.5vw, 64px); line-height: 1.12; letter-spacing: -.025em; }
