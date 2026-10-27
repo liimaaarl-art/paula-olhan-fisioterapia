@@ -1,0 +1,171 @@
+/* Identidade Olhan: cores do manual e fontes locais. Garet Book e Heavy são
+   disponibilizadas gratuitamente para uso na web pela Type Forward/Spacetype.
+   Bodoni Moda é uma alternativa provisória para a fonte de títulos Larisa. */
+@font-face {
+  font-family: 'Garet';
+  src: url('assets/fonts/Garet-Book.woff') format('woff');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Garet';
+  src: url('assets/fonts/Garet-Heavy.woff') format('woff');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Bodoni Moda';
+  src: url('assets/fonts/BodoniModa.woff') format('woff');
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+}
+
+:root {
+  --green: #6a9b98;
+  --orange: #e39361;
+  --cream: #f6f2ea;
+  --white: #ffffff;
+  /* Tons de apoio derivados da paleta, usados para contraste e legibilidade. */
+  --deep: #2b5957;
+  --ink: #1f403f;
+  --muted: #49635f;
+  --line: #d3e3df;
+  --sage-wash: #e6efec;
+  --sage-mist: #f1f6f4;
+  --peach-wash: #f8e9df;
+  --serif: 'Larisa', 'Bodoni Moda', Georgia, serif;
+  --sans: 'Garet', Arial, sans-serif;
+}
+
+body { background: var(--cream); color: var(--ink); }
+button, input, select, textarea { font-family: var(--sans); }
+h1, h2, .founder-name > span, .team-portraits figcaption,
+.contact-form h3, .step-number, .method-pillars article > span {
+  font-family: var(--serif);
+  font-weight: 400;
+  letter-spacing: -.035em;
+}
+h1 em, h2 em { color: var(--deep); font-style: normal; font-weight: 400; }
+p { color: var(--muted); }
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, summary:focus-visible {
+  outline-color: #8d4827;
+}
+
+/* Cabeçalho, primeiro contato e elementos de destaque. */
+.topline { background: var(--deep); color: var(--white); }
+.site-header {
+  background: rgba(246, 242, 234, .97);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+.site-header nav { background: transparent; color: var(--ink); }
+.menu-toggle { border-color: #9bbcb7; }
+.menu-toggle span { background: var(--deep); }
+.site-header nav > a:not(.btn):after { background: var(--orange); height: 2px; }
+.eyebrow { color: var(--deep); }
+.dot, .hero-flower { color: var(--orange); }
+.hero-description, .hero-note, .hero-note b { color: var(--ink); }
+.hero-description strong { color: var(--deep); }
+.hero-ring { border-color: var(--green); }
+.hero-photo { background: var(--sage-wash); }
+.hero-stamp {
+  background: var(--white);
+  border: 1px solid #e8ece6;
+  box-shadow: 0 14px 38px rgba(31, 64, 63, .11);
+}
+.hero-stamp svg { stroke: #a15c37; }
+
+.btn, .action-google, .action-whatsapp {
+  background: var(--deep);
+  border-color: var(--deep);
+  color: var(--white);
+}
+.btn:hover, .action-google:hover, .action-whatsapp:hover {
+  background: #1e4745;
+  border-color: #1e4745;
+  color: var(--white);
+}
+.btn-outline { background: transparent; color: var(--deep); }
+.btn-outline:hover { background: var(--deep); color: var(--white); }
+.action-portal, .action-instagram,
+.footer .footer-main a.external-action.action-instagram {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #183633 !important;
+}
+.action-portal:hover, .action-instagram:hover,
+.footer .footer-main a.external-action.action-instagram:hover {
+  background: #cf8255;
+  border-color: #cf8255;
+  color: #102f2c !important;
+}
+.footer .footer-main a.external-action.action-portal { color: #183633 !important; }
+.footer .footer-main a.external-action.action-whatsapp,
+.footer .footer-main a.external-action.action-google { color: var(--white) !important; }
+.text-link:not(.external-action) { border-color: #9bbcb7; }
+.text-link.light { border-color: #b8d3ce; color: var(--white); }
+.floating-contact { box-shadow: 0 8px 26px rgba(31,64,63,.22); }
+.contact-phone.external-action small { color: #f6f2ea; }
+
+/* Áreas de conteúdo em verde suave, bege e branco. */
+.care-strip, .founder, .care-on-the-way, .footer { background: var(--sage-wash); }
+.care-strip { border-color: var(--line); }
+.strip-inner svg, .credentials svg { color: var(--deep); }
+.icon-box, .step-number, .dialog-close { background: #dbeae6; color: var(--deep); }
+.icon-box.orange { background: var(--peach-wash); color: #8d4827; }
+.essence, .faq-section, .reviews-section { background: var(--white); }
+.essence-detail { border-color: var(--white); }
+.essence-values, .credentials li, .credentials strong,
+.journey-steps small, .registration, .photo-journal figcaption { color: var(--deep); }
+.journey-steps li:not(:last-child):before { background: #bfd7d1; }
+.journey-steps li:not(:last-child):after { color: var(--green); }
+.journey-end { color: var(--muted); }
+.founder-name { background: rgba(246, 242, 234, .97); }
+.founder-name small, .team-portraits figcaption span { color: var(--muted); }
+.method { background: var(--deep); color: var(--cream); }
+.method .eyebrow, .method h2 em, .method-pillars article > span { color: #f2c5a8; }
+.method-heading > p, .method-pillars p { color: #f1f6f4; }
+.method-pillars article { border-color: rgba(246, 242, 234, .26); }
+.faq-list summary span, .principles-list li::marker { color: #a15c37; }
+
+/* Formulários e área do paciente. */
+.contact-form, .info-dialog {
+  background: var(--white);
+  border-color: var(--line);
+  box-shadow: 0 16px 46px rgba(31,64,63,.07);
+}
+.contact-form label, .contact-region, .contact-region span { color: var(--deep) !important; }
+.contact-form input, .contact-form select { border-color: #bfd7d1; color: var(--ink); }
+.contact-form input::placeholder { color: #607771; }
+.contact-form .form-note { color: var(--muted); }
+.patient-status { background: var(--sage-wash); border-color: #bfd7d1; color: var(--ink); }
+.footer-main > div:not(.footer-brand) > a, .footer-main > div > span,
+.footer-bottom, .patient-footer { color: var(--deep); }
+.footer-bottom { border-color: #bfd7d1; }
+.info-dialog::backdrop, .review-dialog::backdrop { background: rgba(24, 54, 51, .72); }
+
+/* Textos de informação ganham espaço sem alterar a organização das seções. */
+.hero-support, .help-grid article p, .essence-copy p, .method-heading > p,
+.method-pillars p, .journey-steps p, .founder-copy > p, .team-heading > p,
+.faq-grid > div > p:not(.eyebrow), .faq-list details > p, .contact-copy > p:not(.eyebrow),
+.credentials li, .care-on-the-way p:not(.eyebrow) { font-size: 14px; line-height: 1.8; }
+.contact-form input, .contact-form select { font-size: 14px; }
+.faq-list summary { font-size: 14px; }
+
+@media (max-width: 700px) {
+  .site-header nav { background: var(--cream); }
+  .hero h1 { font-size: clamp(42px, 11vw, 68px); line-height: 1.08; letter-spacing: -.04em; }
+  .hero .eyebrow { font-size: 9px; line-height: 1.5; }
+  .hero .hero-support { font-size: 14px !important; }
+  .help-grid p { font-size: 14px !important; }
+  .hero-description { font-size: 17px; }
+  .patient-content h1 { font-size: clamp(38px, 10vw, 48px); }
+}
+@media (max-width: 370px) {
+  .hero h1 { font-size: 42px; }
+  .hero .eyebrow { font-size: 9px; }
+}
