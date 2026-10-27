@@ -63,6 +63,7 @@ select:focus-visible, summary:focus-visible {
   backdrop-filter: blur(12px);
 }
 .site-header nav { background: transparent; color: var(--ink); }
+.site-header nav { font-weight: 500; }
 .menu-toggle { border-color: #9bbcb7; }
 .menu-toggle span { background: var(--deep); }
 .site-header nav > a:not(.btn):after { background: var(--orange); height: 2px; }
@@ -72,6 +73,7 @@ select:focus-visible, summary:focus-visible {
 .hero-description strong { color: var(--deep); }
 .hero-ring { border-color: var(--green); }
 .hero-photo { background: var(--sage-wash); }
+.photo-caption { bottom: 64px; }
 .hero-stamp {
   background: var(--white);
   border: 1px solid #e8ece6;
@@ -141,7 +143,8 @@ select:focus-visible, summary:focus-visible {
 .contact-form label, .contact-region, .contact-region span { color: var(--deep) !important; }
 .contact-form input, .contact-form select { border-color: #bfd7d1; color: var(--ink); }
 .contact-form input::placeholder { color: #607771; }
-.contact-form .form-note { color: var(--muted); }
+.contact-form .form-note { color: var(--muted); font-size: 12px; }
+.info-dialog p, .info-dialog li { font-size: 14px; }
 .patient-status { background: var(--sage-wash); border-color: #bfd7d1; color: var(--ink); }
 .footer-main > div:not(.footer-brand) > a, .footer-main > div > span,
 .footer-bottom, .patient-footer { color: var(--deep); }
