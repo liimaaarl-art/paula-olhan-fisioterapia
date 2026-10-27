@@ -7,7 +7,7 @@
  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu();});
  document.addEventListener('click',e=>{if(!e.target.closest('.site-header'))closeMenu();});
  document.querySelectorAll('[data-dialog]').forEach(button=>button.addEventListener('click',()=>{const dialog=document.getElementById(button.dataset.dialog);dialog.showModal();document.body.classList.add('dialog-open');}));
- document.querySelectorAll('dialog').forEach(dialog=>{
+ document.querySelectorAll('dialog.info-dialog').forEach(dialog=>{
   dialog.querySelector('.dialog-close').addEventListener('click',()=>dialog.close());
   dialog.addEventListener('close',()=>document.body.classList.remove('dialog-open'));
   dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
@@ -35,4 +35,13 @@
  const move=direction=>track.scrollBy({left:direction*(track.querySelector('.review-card').getBoundingClientRect().width+24),behavior:reduced.matches?'instant':'smooth'});
  prev.addEventListener('click',()=>move(-1));next.addEventListener('click',()=>move(1));
  track.addEventListener('scroll',update,{passive:true});window.addEventListener('resize',update);window.addEventListener('load',update);update();
+})();
+
+(() => {
+ const dialog=document.getElementById('review-dialog');if(!dialog)return;
+ const content=dialog.querySelector('.review-dialog-content');
+ document.querySelectorAll('.review-expand').forEach(button=>button.addEventListener('click',()=>{content.replaceChildren(button.querySelector('.review-crop').cloneNode(true));dialog.showModal();document.body.classList.add('dialog-open');}));
+ dialog.querySelector('.review-dialog-close').addEventListener('click',()=>dialog.close());
+ dialog.addEventListener('close',()=>document.body.classList.remove('dialog-open'));
+ dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();});
 })();
