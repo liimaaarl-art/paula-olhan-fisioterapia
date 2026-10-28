@@ -1,6 +1,6 @@
 /* Identidade Olhan: cores do manual e fontes locais. Garet Book e Heavy são
    disponibilizadas gratuitamente para uso na web pela Type Forward/Spacetype.
-   Cormorant Garamond equilibra o desenho delicado da identidade com a leitura. */
+   Larisa enviada pela Paula para os títulos; Garet para os textos de apoio. */
 @font-face {
   font-family: 'Garet';
   src: url('assets/fonts/Garet-Book.woff') format('woff');
@@ -13,6 +13,13 @@
   src: url('assets/fonts/Garet-Heavy.woff') format('woff');
   font-style: normal;
   font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Larisa';
+  src: url('assets/fonts/Larisa.woff') format('woff');
+  font-style: normal;
+  font-weight: 400;
   font-display: swap;
 }
 @font-face {
@@ -36,17 +43,19 @@
   --sage-wash: #e6efec;
   --sage-mist: #f1f6f4;
   --peach-wash: #f8e9df;
-  --serif: 'Cormorant Garamond', Georgia, serif;
+  --serif: 'Larisa', 'Cormorant Garamond', Georgia, serif;
   --sans: 'Garet', Arial, sans-serif;
 }
 
 body { background: var(--cream); color: var(--ink); }
 button, input, select, textarea { font-family: var(--sans); }
 h1, h2, .founder-name > span, .team-portraits figcaption,
-.contact-form h3, .step-number, .method-pillars article > span {
+.contact-form h3 {
   font-family: var(--serif);
-  font-weight: 600;
-  letter-spacing: -.025em;
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.4;
+  letter-spacing: 0;
 }
 h1 em, h2 em { color: var(--deep); font-style: normal; font-weight: inherit; }
 p { color: var(--muted); }
@@ -177,7 +186,7 @@ select:focus-visible, summary:focus-visible {
 
 @media (max-width: 700px) {
   .site-header nav { background: var(--cream); }
-  .hero h1 { font-size: clamp(44px, 11vw, 68px); line-height: 1.1; letter-spacing: -.025em; }
+  .hero h1 { font-size: clamp(44px, 11vw, 68px); line-height: 1.4; letter-spacing: 0; }
   .hero .eyebrow { font-size: 9px; line-height: 1.5; }
   .hero .hero-support { font-size: 14px !important; }
   .help-grid p { font-size: 14px !important; }
@@ -187,4 +196,20 @@ select:focus-visible, summary:focus-visible {
 @media (max-width: 370px) {
   .hero h1 { font-size: 44px; }
   .hero .eyebrow { font-size: 9px; }
+}
+
+
+/* Fotografias dos atendimentos domiciliares. */
+.atendimento-gallery { padding-top: 30px; }
+.atendimento-gallery > p:not(.eyebrow) { max-width: 620px; line-height: 1.8; }
+.atendimento-photos { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 20px; margin-top: 32px; }
+.atendimento-photos figure { margin: 0; min-width: 0; }
+.atendimento-photos img { display: block; width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: 50% 45%; border-radius: 16px; }
+.atendimento-photos figcaption { font-family: var(--sans); font-size: 13px; line-height: 1.6; color: var(--deep); padding-top: 12px; }
+.hero h1 { line-height: 1.4; letter-spacing: 0; }
+.step-number, .method-pillars article > span { font-family: var(--sans); font-weight: 400; }
+.floating-contact span { max-width: 250px; white-space: normal; line-height: 1.5; }
+@media(max-width: 700px) {
+  .atendimento-photos { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px 14px; }
+  .floating-contact { max-width: calc(100vw - 32px); }
 }
