@@ -9,13 +9,6 @@
   font-display: swap;
 }
 @font-face {
-  font-family: 'Garet';
-  src: url('assets/fonts/Garet-Heavy.woff') format('woff');
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-@font-face {
   font-family: 'Larisa';
   src: url('assets/fonts/Larisa.woff') format('woff');
   font-style: normal;
@@ -44,7 +37,8 @@
   --sage-mist: #f1f6f4;
   --peach-wash: #f8e9df;
   --serif: 'Larisa', 'Cormorant Garamond', Georgia, serif;
-  --sans: 'Garet', Arial, sans-serif;
+  --sans: 'Manrope', Arial, sans-serif;
+  --subtitle: 'Garet', Arial, sans-serif;
 }
 
 body { background: var(--cream); color: var(--ink); }
@@ -212,4 +206,41 @@ select:focus-visible, summary:focus-visible {
 @media(max-width: 700px) {
   .atendimento-photos { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px 14px; }
   .floating-contact { max-width: calc(100vw - 32px); }
+}
+
+/* Textos de apoio leves, com a identidade preservada nos títulos e subtítulos. */
+@font-face {
+  font-family: 'Manrope';
+  src: url('assets/fonts/Manrope.woff') format('woff');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+body { font-family: var(--sans); font-weight: 400; }
+h3, .eyebrow, .hero-description { font-family: var(--subtitle); font-weight: 400; font-synthesis: none; }
+.eyebrow { letter-spacing: .11em; }
+strong, b { font-family: var(--sans); font-weight: 600; }
+.btn, .external-action, .text-link, .floating-contact.action-whatsapp,
+.footer .footer-main a.external-action { font-family: var(--sans); font-weight: 500; }
+.site-header nav, .faq-list summary, .contact-form label,
+.strip-inner > span, .photo-caption, .hero-stamp strong,
+.credentials strong, .hero-note b { font-family: var(--sans); font-weight: 500; }
+.hero-description strong { font-weight: 600; }
+.contact-phone span { font-family: var(--sans); font-weight: 500; font-size: 24px; }
+.contact-phone small { font-family: var(--sans); font-weight: 400; }
+.hero h1 { width: 100%; max-width: none; line-height: 1.22; }
+.hero h1 .title-line { display: block; font-weight: 400; }
+.hero-copy { min-width: 0; }
+.method-photo figcaption { font-family: var(--subtitle); font-size: 18px; line-height: 1.6; font-weight: 400; }
+.patient-content .patient-illustration p { font-family: var(--subtitle); font-weight: 400; }
+@media(max-width: 700px) {
+  .hero.wrap { width: calc(100% - 36px); }
+  .hero-copy { width: 100%; }
+  .hero h1 { font-size: clamp(56px, 15vw, 72px); line-height: 1.22; margin: 0 0 28px; padding: 4px 0 6px; }
+  .hero .eyebrow { font-size: 10px; font-weight: 400; line-height: 1.7; letter-spacing: .09em; max-width: 360px; margin-bottom: 25px; }
+  .hero-description { max-width: none; font-size: 17px; line-height: 1.8; }
+  .hero-support { max-width: none; }
+  .floating-contact.action-whatsapp { max-width: 280px; padding: 12px 16px; font-size: 12px; }
+  .floating-contact span { max-width: 225px; }
+  body { padding-bottom: 90px; }
 }
