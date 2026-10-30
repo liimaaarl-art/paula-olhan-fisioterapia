@@ -245,3 +245,23 @@ strong, b { font-family: var(--sans); font-weight: 600; }
   .floating-contact span { max-width: 225px; }
   body { padding-bottom: 90px; }
 }
+
+/* Informações de atendimento e contatos em destaque. */
+.hero-note { font-size: 14px; line-height: 1.6; gap: 15px; }
+.hero-note svg { width: 34px; height: 34px; flex: 0 0 34px; }
+.footer .footer-main .footer-contact .footer-info {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 46px; margin: 0 0 12px; padding: 11px 14px;
+  border: 1px solid #a8c8c2; border-radius: 9px; box-sizing: border-box;
+  background: #f6f2ea; color: #1f403f; font: 500 13px/1.5 var(--sans);
+  text-align: center; overflow-wrap: anywhere;
+}
+.footer .footer-main .footer-contact .footer-info svg {
+  flex: 0 0 19px; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.5;
+}
+.footer .footer-main .footer-contact .footer-info span { min-width: 0; overflow-wrap: anywhere; }
+.footer .footer-main .footer-contact a.footer-info:hover { background: #e6efec; }
+@media (max-width: 700px) {
+  .hero-note { font-size: 14px; }
+  .footer .footer-main .footer-contact .footer-info { font-size: 12px; }
+}
