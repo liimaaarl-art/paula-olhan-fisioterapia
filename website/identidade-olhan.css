@@ -1,6 +1,5 @@
-/* Identidade Olhan: cores do manual e fontes locais. Garet Book e Heavy são
-   disponibilizadas gratuitamente para uso na web pela Type Forward/Spacetype.
-   Larisa enviada pela Paula para os títulos; Garet para os textos de apoio. */
+/* Identidade Olhan: Bodoni Moda nos títulos, Garet nos subtítulos e
+   Manrope nos textos de apoio. Fontes locais e cores do manual. */
 @font-face {
   font-family: 'Garet';
   src: url('assets/fonts/Garet-Book.woff') format('woff');
@@ -9,10 +8,10 @@
   font-display: swap;
 }
 @font-face {
-  font-family: 'Larisa';
-  src: url('assets/fonts/Larisa.woff') format('woff');
+  font-family: 'Bodoni Moda';
+  src: url('assets/fonts/BodoniModa.woff') format('woff');
   font-style: normal;
-  font-weight: 400;
+  font-weight: 400 900;
   font-display: swap;
 }
 @font-face {
@@ -36,7 +35,7 @@
   --sage-wash: #e6efec;
   --sage-mist: #f1f6f4;
   --peach-wash: #f8e9df;
-  --serif: 'Larisa', 'Cormorant Garamond', Georgia, serif;
+  --serif: 'Bodoni Moda', Georgia, serif;
   --sans: 'Manrope', Arial, sans-serif;
   --subtitle: 'Garet', Arial, sans-serif;
 }
@@ -46,10 +45,12 @@ button, input, select, textarea { font-family: var(--sans); }
 h1, h2, .founder-name > span, .team-portraits figcaption,
 .contact-form h3 {
   font-family: var(--serif);
-  font-weight: 400;
+  font-weight: 500;
   font-synthesis: none;
-  line-height: 1.4;
-  letter-spacing: 0;
+  font-optical-sizing: none;
+  font-variation-settings: 'opsz' 9;
+  line-height: 1.16;
+  letter-spacing: -.025em;
 }
 h1 em, h2 em { color: var(--deep); font-style: normal; font-weight: inherit; }
 p { color: var(--muted); }
@@ -228,15 +229,15 @@ strong, b { font-family: var(--sans); font-weight: 600; }
 .hero-description strong { font-weight: 600; }
 .contact-phone span { font-family: var(--sans); font-weight: 500; font-size: 24px; }
 .contact-phone small { font-family: var(--sans); font-weight: 400; }
-.hero h1 { width: 100%; max-width: none; line-height: 1.22; }
-.hero h1 .title-line { display: block; font-weight: 400; }
+.hero h1 { width: 100%; max-width: none; line-height: 1.16; }
+.hero h1 .title-line { display: block; font-weight: inherit; }
 .hero-copy { min-width: 0; }
 .method-photo figcaption { font-family: var(--subtitle); font-size: 18px; line-height: 1.6; font-weight: 400; }
 .patient-content .patient-illustration p { font-family: var(--subtitle); font-weight: 400; }
 @media(max-width: 700px) {
   .hero.wrap { width: calc(100% - 36px); }
   .hero-copy { width: 100%; }
-  .hero h1 { font-size: clamp(56px, 15vw, 72px); line-height: 1.22; margin: 0 0 28px; padding: 4px 0 6px; }
+  .hero h1 { font-size: clamp(42px, 11.4vw, 56px); line-height: 1.16; margin: 0 0 28px; padding: 4px 0 6px; }
   .hero .eyebrow { font-size: 10px; font-weight: 400; line-height: 1.7; letter-spacing: .09em; max-width: 360px; margin-bottom: 25px; }
   .hero-description { max-width: none; font-size: 17px; line-height: 1.8; }
   .hero-support { max-width: none; }
