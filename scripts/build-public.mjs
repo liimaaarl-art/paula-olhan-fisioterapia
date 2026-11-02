@@ -13,7 +13,7 @@ await mkdir('public');
 for (const file of ['cloud.js','login.html','auth-ui.css','auth-ui.js','auth-account.js','care.css','care.js','bi.css','bi.js','schedule.js','assistant-actions.js','assistant.css','assistant.js','team-contracts.js']) await copyFile(file, 'public/' + file);
 
 
-for(const file of ['paciente.html','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
+for(const file of ['paciente.html','paciente-demonstracao.html','patient-demo.js','patient-demo-foto.jpg','patient-demo-video.mp4','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
 if(process.env.OLHAN_PATIENT_TEST==='1' && process.env.VERCEL_ENV==='preview') await import('./verify-patient-portal.mjs');
 if (process.env.VERCEL_ENV === 'production') {
  await import('./verify-private-storage.mjs');
