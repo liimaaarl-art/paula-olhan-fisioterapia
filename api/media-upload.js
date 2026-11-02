@@ -17,7 +17,7 @@ export default protect(async function(req,res){
   if(!state[0]?.data?.patients?.some(p=>p.id===b.patient))return json(res,404,{error:'Salve o cadastro do paciente primeiro.'});
   client=r2Client(cfg);const send=command=>client.send(command,{abortSignal:AbortSignal.timeout(45000)});
   if(b.action==='init'){
-   if(!types.has(b.type)||typeof b.name!=='string'||!b.name.trim()||b.name.length>240||!Number.isSafeInteger(b.size)||b.size<1||b.size>104857600)return json(res,400,{error:'Use PDF, imagem ou vídeo MP4/WebM de até 100 MB.'});
+   if(!types.has(b.type)||typeof b.name!=='string'||!b.name.trim()||b.name.length>240||!Number.isSafeInteger(b.size)||b.size<1||b.size>52428800)return json(res,400,{error:'Use PDF, imagem ou vídeo MP4/WebM de até 50 MB.'});
    const id=randomUUID(),key='olhan/private/'+id;
    const upload=await send(new CreateMultipartUploadCommand({Bucket:cfg.bucket,Key:key,ContentType:b.type}));
    await sql`INSERT INTO public.olhan_cloud_files_large(id,patient_id,object_key,name,mime,size,uploaded_by,upload_id) VALUES(${id}::uuid,${b.patient},${key},${b.name},${b.type},${b.size},${req.olhanUser.id},${upload.UploadId})`;

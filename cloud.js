@@ -15,7 +15,7 @@
  }
  async function sendFile(file,patient,name,type,migration=false){
   if(typeof file!=='string'&&!migration){
-   if(file.size>104857600)throw Error('Limite de 100 MB por arquivo.');
+   if(file.size>52428800)throw Error('Limite de 50 MB por arquivo.');
    const pending=await api('/api/media-upload',{action:'init',patient,name,type:type||file.type,size:file.size});
    try{for(let i=0;i<pending.chunks;i++){
     status('Enviando arquivo… '+Math.round(i/pending.chunks*100)+'%');
@@ -52,7 +52,7 @@
  save=persist;
  const oldToast=toast;toast=function(message){if(running&&/salv|registrad|atualizad|criad|anexad|excluí|removid/i.test(message))return oldToast('Alteração em processamento. Confira a confirmação de salvamento no servidor.');return oldToast(message);};
  window.addEventListener('beforeunload',e=>{if(running||pending!==null){e.preventDefault();e.returnValue='';}});
- uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>104857600)return toast('Limite de 100 MB por arquivo.');const pid=patientId,folder=typeof patientFileFolderFilter==='string'&&patientFileFolderFilter!=='Todos'?patientFileFolderFilter:'Geral';
+ uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>52428800)return toast('Limite de 50 MB por arquivo.');const pid=patientId,folder=typeof patientFileFolderFilter==='string'&&patientFileFolderFilter!=='Todos'?patientFileFolderFilter:'Geral';
   try{await OlhanCloud.flush();status('Enviando arquivo ao servidor…');const item=await sendFile(file,pid,file.name,file.type);db.files.push({...item,cloudId:item.id,patient:pid,folder,date:today});persist();await OlhanCloud.flush();render();}
   catch(e){status(e.message||'Não foi possível salvar o arquivo.');}
  };
