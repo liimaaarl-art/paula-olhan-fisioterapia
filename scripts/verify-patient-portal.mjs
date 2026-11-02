@@ -7,6 +7,7 @@ import { patientMayReadFile } from '../lib/patient-portal.js';
 import { rateKey,identityKey } from '../lib/patient-security.js';
 import { signedMediaUrl } from '../lib/media-sign.js';
 if(process.env.VERCEL_ENV!=='preview'||process.env.OLHAN_PATIENT_TEST!=='1')throw Error('Isolated preview required');
+const regression=spawnSync('npm',['test'],{stdio:'inherit',env:{...process.env,OLHAN_PATIENT_TEST:'0',OLHAN_AUTH_SELF_TEST:'0'}});if(regression.status)throw Error('Application regression checks failed');
 const tests=spawnSync(process.execPath,['--test','tests/patient-identity.test.mjs','tests/patient-portal.test.mjs','tests/patient-security.test.mjs'],{stdio:'inherit'});if(tests.status)throw Error('Patient unit checks failed');
 const sql=neon(process.env.DATABASE_URL),secret='isolated-patient-test-secret-'.repeat(3);
 const f1='11111111-1111-4111-8111-111111111111',f2='22222222-2222-4222-8222-222222222222';
