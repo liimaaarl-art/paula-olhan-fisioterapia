@@ -14,6 +14,7 @@
   const j=await r.json();if(!r.ok){const e=Error(j.error||'O servidor não confirmou o salvamento.');e.status=r.status;throw e;}return j;
  }
  async function sendFile(file,patient,name,type,migration=false){
+  if(typeof file!=='string'&&!migration){if(file.size>104857600)throw Error('Limite de 100 MB por arquivo.');const pending=await api('/api/media-upload',{action:'init',patient,name,type:type||file.type,size:file.size});const sent=await fetch(pending.url,{method:'PUT',headers:{'Content-Type':type||file.type},body:file});if(!sent.ok)throw Error('O envio do arquivo não foi concluído.');return api('/api/media-upload',{action:'finish',patient,id:pending.id});}
   const encoded=typeof file==='string'?file:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
   const parts=/^data:([^;,]+);base64,(.*)$/.exec(encoded);if(!parts)throw Error('Anexo local inválido: '+name);
   return api('/api/files',{patient,name,type:type||parts[1],base64:parts[2],migration});
@@ -40,7 +41,7 @@
  save=persist;
  const oldToast=toast;toast=function(message){if(running&&/salv|registrad|atualizad|criad|anexad|excluí|removid/i.test(message))return oldToast('Alteração em processamento. Confira a confirmação de salvamento no servidor.');return oldToast(message);};
  window.addEventListener('beforeunload',e=>{if(running||pending!==null){e.preventDefault();e.returnValue='';}});
- uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>3145728)return toast('Limite de 3 MB por arquivo.');const pid=patientId,folder=typeof patientFileFolderFilter==='string'&&patientFileFolderFilter!=='Todos'?patientFileFolderFilter:'Geral';
+ uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>104857600)return toast('Limite de 100 MB por arquivo.');const pid=patientId,folder=typeof patientFileFolderFilter==='string'&&patientFileFolderFilter!=='Todos'?patientFileFolderFilter:'Geral';
   try{await OlhanCloud.flush();status('Enviando arquivo ao servidor…');const item=await sendFile(file,pid,file.name,file.type);db.files.push({...item,cloudId:item.id,patient:pid,folder,date:today});persist();await OlhanCloud.flush();render();}
   catch(e){status(e.message||'Não foi possível salvar o arquivo.');}
  };
@@ -97,3 +98,4 @@
  };
  status('Aguardando confirmação da importação.');
 })();
+

@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { neon } from '@neondatabase/serverless';
+import { makePatientHandler } from '../lib/patient-service.js';
+import { syncPatientAccounts } from '../lib/patient-store.js';
+import { patientMayReadFile } from '../lib/patient-portal.js';
+import { signedMediaUrl } from '../lib/media-sign.js';
+if(process.env.VERCEL_ENV!=='preview'||process.env.OLHAN_PATIENT_TEST!=='1')throw Error('Isolated preview required');
+const tests=spawnSync(process.execPath,['--test','tests/patient-identity.test.mjs','tests/patient-portal.test.mjs','tests/patient-security.test.mjs'],{stdio:'inherit'});if(tests.status)throw Error('Patient unit checks failed');
+const sql=neon(process.env.DATABASE_URL),secret='isolated-patient-test-secret-'.repeat(3);
+const f1='11111111-1111-4111-8111-111111111111',f2='22222222-2222-4222-8222-222222222222';
+const data={patients:[{id:'portal-test-1',cpf:'52998224725',birth:'1980-01-01',name:'Paciente de teste 1'},{id:'portal-test-2',cpf:'11144477735',birth:'1981-02-02',name:'Paciente de teste 2'}],files:[{id:f1,patient:'portal-test-1',name:'Foto de teste',type:'image/jpeg',data:'/api/files?id='+f1},{id:f2,patient:'portal-test-2',name:'Outra foto',type:'image/jpeg',data:'/api/files?id='+f2}],records:[{patient:'portal-test-1',general:'Orientação publicada',type:'Evolução',date:'2026-11-02'},{patient:'portal-test-1',general:'Rascunho secreto',draft:true}],appointments:[],team:[],invoices:[]};
+// This DATABASE_URL is scoped to a dedicated disposable test branch.
+await sql`UPDATE public.olhan_workspace SET data=${JSON.stringify(data)}::jsonb WHERE id='olhan'`;
+await syncPatientAccounts(sql,data,secret);
+const handler=makePatientHandler({sqlFactory:()=>sql,secret,production:false,getAdmin:async()=>({user:{role:'admin'}}),fileUrl:async(_,id,s)=>patientMayReadFile(s.data,{role:'patient',patientId:s.patient.id},{id,patient_id:id===f1?'portal-test-1':'portal-test-2',mime:'image/jpeg'})?'https://example.invalid/opaque':null});
+async function call(body,cookie='',query={}){let status,headers={},payload;const res={setHeader(k,v){headers[k.toLowerCase()]=v;return this},status(s){status=s;return this},end(p){payload=JSON.parse(p);return this}};await handler({method:body?'POST':'GET',headers:{origin:'https://portal-test.invalid',host:'portal-test.invalid','content-type':'application/json',cookie,'x-vercel-forwarded-for':'isolated-test'},body,query},res);return {status,headers,payload};}
+const invite=await call({action:'invite',patientId:'portal-test-1'});assert.equal(invite.status,200);const token=new URLSearchParams(new URL(invite.payload.url).hash.slice(1)).get('ativar');
+assert.equal((await call({action:'activate',cpf:data.patients[0].cpf,birth:'1980-01-02',token,password:'teste-paciente-12345'})).status,400);
+assert.equal((await call({action:'activate',cpf:data.patients[0].cpf,birth:data.patients[0].birth,token,password:'teste-paciente-12345'})).status,200);
+assert.equal((await call({action:'activate',cpf:data.patients[0].cpf,birth:data.patients[0].birth,token,password:'teste-paciente-12345'})).status,400);
+assert.equal((await call({action:'login',cpf:data.patients[0].cpf,password:'errada'})).status,401);
+const login=await call({action:'login',cpf:data.patients[0].cpf,password:'teste-paciente-12345'});assert.equal(login.status,200);let cookie=login.headers['set-cookie'].split(';')[0];assert.ok(login.headers['set-cookie'].includes('HttpOnly; Secure; SameSite=Lax'));
+const view=await call(undefined,cookie,{patientId:'portal-test-2'});assert.equal(view.status,200);assert.equal(view.payload.media.length,1);assert.equal(view.payload.media[0].id,f1);assert.equal(view.payload.records.length,1);assert.ok(!JSON.stringify(view.payload).includes('Rascunho'));
+assert.equal((await call(undefined,cookie,{action:'file',id:f2})).status,404);assert.equal((await call(undefined,cookie,{action:'file',id:f1})).status,200);
+assert.equal((await call(undefined,'')).status,401);
+assert.equal((await call({action:'change-password',currentPassword:'teste-paciente-12345',newPassword:'nova-senha-paciente-12345'},cookie)).status,200);
+assert.equal((await call(undefined,cookie)).status,401);
+const next=await call({action:'login',cpf:data.patients[0].cpf,password:'nova-senha-paciente-12345'});assert.equal(next.status,200);cookie=next.headers['set-cookie'].split(';')[0];
+data.patients[0].status='Suspenso';await sql`UPDATE public.olhan_workspace SET data=${JSON.stringify(data)}::jsonb WHERE id='olhan'`;assert.equal((await call(undefined,cookie)).status,401);
+const url=await signedMediaUrl({endpoint:'https://'+'a'.repeat(32)+'.r2.cloudflarestorage.com',bucket:'isolated-test',credentials:{accessKeyId:'test',secretAccessKey:'test'}},'olhan/private/test',{method:'PUT',type:'video/mp4',seconds:600});assert.ok(url.includes('X-Amz-Signature='));assert.ok(url.includes('X-Amz-Expires=600'));assert.ok(url.includes('content-type'));
+console.log('PATIENT_PORTAL_CHECKS_PASSED: activation, CPF login, password change, cookie, session revocation, drafts and cross-patient isolation.');

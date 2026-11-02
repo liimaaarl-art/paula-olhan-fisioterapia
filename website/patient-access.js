@@ -1,0 +1,1 @@
+(()=>{const t=new URLSearchParams(location.hash.slice(1)).get('ativar');if(t&&/^[-\w]{43}$/.test(t)){history.replaceState(null,'',location.pathname);location.replace('https://paulaolhanfisioterapeuta.vercel.app/paciente.html#ativar='+encodeURIComponent(t));}})();

@@ -1,3 +1,4 @@
+import { signedMediaUrl } from '../lib/media-sign.js';
 import { randomUUID } from 'node:crypto';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { protect } from '../lib/auth-guard.js';
@@ -12,9 +13,9 @@ export function fileHandler({sqlFactory=db,config=r2Config,clientFactory=r2Clien
  try {
   if(req.method==='GET'){
    const id=req.query?.id;if(typeof id!=='string'||!/^[0-9a-f-]{36}$/.test(id))return json(res,400,{error:'Arquivo inválido.'});
-   const rows=await sql`SELECT f.* FROM public.olhan_cloud_files f JOIN public.olhan_workspace w ON w.id='olhan' WHERE f.id=${id}::uuid AND EXISTS (SELECT 1 FROM jsonb_array_elements(w.data->'files') x WHERE COALESCE(x->>'cloudId',x->>'id')=f.id::text AND x->>'patient'=f.patient_id)`;
+   const rows=await sql`SELECT f.* FROM (SELECT id,patient_id,object_key,name,mime,size FROM public.olhan_cloud_files UNION ALL SELECT id,patient_id,object_key,name,mime,size FROM public.olhan_cloud_files_large WHERE ready) f JOIN public.olhan_workspace w ON w.id='olhan' WHERE f.id=${id}::uuid AND EXISTS (SELECT 1 FROM jsonb_array_elements(w.data->'files') x WHERE COALESCE(x->>'cloudId',x->>'id')=f.id::text AND x->>'patient'=f.patient_id)`;
    if(!rows.length)return json(res,404,{error:'Arquivo não encontrado no prontuário.'});
-   const file=rows[0];client=clientFactory(cfg);
+   const file=rows[0];if(file.size>3145728){res.setHeader('Cache-Control','private, no-store');res.setHeader('Location',await signedMediaUrl(cfg,file.object_key));res.status(302);return res.end();}client=clientFactory(cfg);
    const object=await client.send(new GetObjectCommand({Bucket:cfg.bucket,Key:file.object_key}),{abortSignal:AbortSignal.timeout(15000)});
    const bytes=await object.Body.transformToByteArray();
    res.setHeader('Cache-Control','private, no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"sandbox; default-src 'none'");
@@ -38,3 +39,4 @@ export function fileHandler({sqlFactory=db,config=r2Config,clientFactory=r2Clien
  }catch{return json(res,503,{error:'Não foi possível confirmar o arquivo no servidor. O arquivo local foi preservado.'});}finally{client?.destroy?.();}
 };}
 export default protect(fileHandler());
+

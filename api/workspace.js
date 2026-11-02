@@ -1,3 +1,4 @@
+import { syncPatientAccounts } from '../lib/patient-store.js';
 import { protect } from '../lib/auth-guard.js';
 import { db, json } from '../lib/db.js';
 import { workspace, validateState, emptyWorkspace } from '../lib/workspace.js';
@@ -43,7 +44,9 @@ export function workspaceHandler(sqlFactory=db) { return async (req,res)=>{
    INSERT INTO public.olhan_workspace_history(revision,data,updated_by) SELECT revision,data,updated_by FROM all_changes RETURNING revision
   ) SELECT revision FROM archived`;
   if(!result.length)return json(res,409,{error:'Outra sessão alterou os dados. Exporte suas alterações pendentes antes de recarregar.',code:'REVISION_CONFLICT'});
-  return json(res,200,{revision:result[0].revision});
+  let portalPending=false;try{await syncPatientAccounts(sql,data,process.env.BETTER_AUTH_SECRET);}catch{portalPending=true;}
+  return json(res,200,{revision:result[0].revision,portalPending});
  }catch{return json(res,503,{error:'O servidor não confirmou o salvamento. Suas alterações continuam nesta tela.'});}
 };}
 export default protect(workspaceHandler());
+
