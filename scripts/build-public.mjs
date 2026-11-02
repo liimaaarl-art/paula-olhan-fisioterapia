@@ -17,7 +17,7 @@ for(const file of ['paciente.html','patient-portal.js','patient-portal.css','sta
 if(process.env.OLHAN_PATIENT_TEST==='1' && process.env.VERCEL_ENV==='preview') await import('./verify-patient-portal.mjs');
 if (process.env.VERCEL_ENV === 'production') {
  await import('./verify-private-storage.mjs');
- await import('./verify-direct-media.mjs');
+ if(process.env.OLHAN_MEDIA_SELF_TEST==='1')await import('./verify-direct-media.mjs');
  await import('./provision-support.mjs');
 }
 

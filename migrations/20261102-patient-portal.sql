@@ -26,3 +26,5 @@ CREATE TABLE IF NOT EXISTS public.olhan_cloud_files_large (
 CREATE INDEX IF NOT EXISTS olhan_cloud_files_large_patient ON public.olhan_cloud_files_large(patient_id);
 ALTER TABLE public.olhan_cloud_files_large ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.olhan_cloud_files_large FROM PUBLIC;
+ALTER TABLE public.olhan_cloud_files_large ADD COLUMN IF NOT EXISTS upload_id text;
+ALTER TABLE public.olhan_cloud_files_large ADD COLUMN IF NOT EXISTS parts jsonb NOT NULL DEFAULT '{}'::jsonb;

@@ -14,7 +14,18 @@
   const j=await r.json();if(!r.ok){const e=Error(j.error||'O servidor não confirmou o salvamento.');e.status=r.status;throw e;}return j;
  }
  async function sendFile(file,patient,name,type,migration=false){
-  if(typeof file!=='string'&&!migration){if(file.size>104857600)throw Error('Limite de 100 MB por arquivo.');const pending=await api('/api/media-upload',{action:'init',patient,name,type:type||file.type,size:file.size});const sent=await fetch(pending.url,{method:'PUT',headers:{'Content-Type':type||file.type},body:file});if(!sent.ok)throw Error('O envio do arquivo não foi concluído.');return api('/api/media-upload',{action:'finish',patient,id:pending.id});}
+  if(typeof file!=='string'&&!migration){
+   if(file.size>104857600)throw Error('Limite de 100 MB por arquivo.');
+   const pending=await api('/api/media-upload',{action:'init',patient,name,type:type||file.type,size:file.size});
+   try{for(let i=0;i<pending.chunks;i++){
+    status('Enviando arquivo… '+Math.round(i/pending.chunks*100)+'%');
+    const blob=file.slice(i*pending.chunkSize,Math.min(file.size,(i+1)*pending.chunkSize));
+    const encoded=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=reject;r.readAsDataURL(blob)});
+    await api('/api/media-upload',{action:'chunk',patient,id:pending.id,index:i,base64:encoded});
+    if(i%3===2||i===pending.chunks-1)await api('/api/media-upload',{action:'assemble',patient,id:pending.id,part:Math.floor(i/3)});
+   }return await api('/api/media-upload',{action:'finish',patient,id:pending.id});
+   }catch(e){await api('/api/media-upload',{action:'abort',patient,id:pending.id}).catch(()=>{});throw e;}
+  }
   const encoded=typeof file==='string'?file:await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
   const parts=/^data:([^;,]+);base64,(.*)$/.exec(encoded);if(!parts)throw Error('Anexo local inválido: '+name);
   return api('/api/files',{patient,name,type:type||parts[1],base64:parts[2],migration});
