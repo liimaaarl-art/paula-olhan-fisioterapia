@@ -1,3 +1,4 @@
+import { syncPatientAccounts } from '../lib/patient-store.js';
 import { readFile } from 'node:fs/promises';
 import { workspace } from '../lib/workspace.js';
 import { adminSession } from '../lib/auth.js';
@@ -13,6 +14,7 @@ export default async function handler(req, res) {
     if (!session) { res.status(302); res.setHeader('Location', '/login.html'); return res.end(); }
     source ||= await readFile(new URL('../index.html', import.meta.url), 'utf8');
     const cloud = await workspace();
+    if(cloud.data)try{await syncPatientAccounts((await import('../lib/db.js')).db(),cloud.data,process.env.BETTER_AUTH_SECRET);}catch{/* Saving and invitation creation retry enrollment. */}
     const bootstrap = JSON.stringify({...cloud,role:session.user.role}).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
     const html = source.replace('<head>', '<head><script>window.__OLHAN_CLOUD__='+bootstrap+';</script>').replace('</body>', '<script src="/cloud.js"></script><script src="/auth-account.js"></script><script src="/staff-patient-access.js"></script></body>');
     res.status(200); res.setHeader('Content-Type', 'text/html; charset=utf-8');

@@ -30,7 +30,7 @@
   try{while(pending!==null){const next=pending;pending=null;status('Salvando no servidor…');const data=JSON.parse(next);await migrateFiles(data);
    const result=await api('/api/workspace',{revision,data},'PUT');revision=result.revision;confirmed=JSON.stringify(data);savedSnapshot=confirmed;
    // Keep metadata converted during a legacy import, unless newer edits exist.
-   if(pending===null){db=data;render();}status('Salvo no servidor · versão '+revision);
+   if(pending===null){db=data;render();}status(result.portalPending?'Dados salvos. O pré-cadastro de acesso será tentado novamente ao gerar o link.':'Salvo no servidor · versão '+revision);
   }}catch(e){blocked=true;pending=JSON.stringify(db);status(e.message+' Exporte sua cópia antes de sair.');throw e;}
  }
  function persist(){

@@ -4,6 +4,7 @@ import { neon } from '@neondatabase/serverless';
 import { makePatientHandler } from '../lib/patient-service.js';
 import { syncPatientAccounts } from '../lib/patient-store.js';
 import { patientMayReadFile } from '../lib/patient-portal.js';
+import { rateKey,identityKey } from '../lib/patient-security.js';
 import { signedMediaUrl } from '../lib/media-sign.js';
 if(process.env.VERCEL_ENV!=='preview'||process.env.OLHAN_PATIENT_TEST!=='1')throw Error('Isolated preview required');
 const tests=spawnSync(process.execPath,['--test','tests/patient-identity.test.mjs','tests/patient-portal.test.mjs','tests/patient-security.test.mjs'],{stdio:'inherit'});if(tests.status)throw Error('Patient unit checks failed');
@@ -12,6 +13,10 @@ const f1='11111111-1111-4111-8111-111111111111',f2='22222222-2222-4222-8222-2222
 const data={patients:[{id:'portal-test-1',cpf:'52998224725',birth:'1980-01-01',name:'Paciente de teste 1'},{id:'portal-test-2',cpf:'11144477735',birth:'1981-02-02',name:'Paciente de teste 2'}],files:[{id:f1,patient:'portal-test-1',name:'Foto de teste',type:'image/jpeg',data:'/api/files?id='+f1},{id:f2,patient:'portal-test-2',name:'Outra foto',type:'image/jpeg',data:'/api/files?id='+f2}],records:[{patient:'portal-test-1',general:'Orientação publicada',type:'Evolução',date:'2026-11-02'},{patient:'portal-test-1',general:'Rascunho secreto',draft:true}],appointments:[],team:[],invoices:[]};
 // This DATABASE_URL is scoped to a dedicated disposable test branch.
 await sql`UPDATE public.olhan_workspace SET data=${JSON.stringify(data)}::jsonb WHERE id='olhan'`;
+const keys=[rateKey('ip:isolated-test',secret),rateKey('cpf:'+identityKey('52998224725',secret),secret),rateKey('change:portal-test-1',secret)];
+await sql`DELETE FROM public.olhan_patient_rates WHERE key=ANY(${keys}::text[])`;
+await sql`DELETE FROM public.olhan_patient_sessions WHERE patient_id IN ('portal-test-1','portal-test-2')`;
+await sql`DELETE FROM public.olhan_patient_accounts WHERE patient_id IN ('portal-test-1','portal-test-2')`;
 await syncPatientAccounts(sql,data,secret);
 const handler=makePatientHandler({sqlFactory:()=>sql,secret,production:false,getAdmin:async()=>({user:{role:'admin'}}),fileUrl:async(_,id,s)=>patientMayReadFile(s.data,{role:'patient',patientId:s.patient.id},{id,patient_id:id===f1?'portal-test-1':'portal-test-2',mime:'image/jpeg'})?'https://example.invalid/opaque':null});
 async function call(body,cookie='',query={}){let status,headers={},payload;const res={setHeader(k,v){headers[k.toLowerCase()]=v;return this},status(s){status=s;return this},end(p){payload=JSON.parse(p);return this}};await handler({method:body?'POST':'GET',headers:{origin:'https://portal-test.invalid',host:'portal-test.invalid','content-type':'application/json',cookie,'x-vercel-forwarded-for':'isolated-test'},body,query},res);return {status,headers,payload};}
