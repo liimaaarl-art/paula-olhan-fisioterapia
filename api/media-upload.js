@@ -7,7 +7,7 @@ import { r2Config,r2Client } from '../lib/r2.js';
 const types=new Set(['image/png','image/jpeg','image/webp','image/gif','video/mp4','video/webm','application/pdf']);
 const CHUNK=2097152,PART=CHUNK*3;
 const chunkKey=(f,n)=>'olhan/private-upload/'+f.id+'/'+n;
-export default protect(async function(req,res){
+export async function mediaUploadHandler(req,res){
  if(req.method!=='POST')return json(res,405,{error:'Método não permitido.'});
  if(!sameOrigin(req)||!String(req.headers['content-type']||'').startsWith('application/json'))return json(res,403,{error:'Solicitação não autorizada.'});
  const cfg=r2Config();if(!cfg)return json(res,503,{error:'Armazenamento indisponível.'});
@@ -56,4 +56,5 @@ export default protect(async function(req,res){
   }
   return json(res,400,{error:'Operação inválida.'});
  }catch{return json(res,503,{error:'O arquivo não foi confirmado. Tente novamente.'});}finally{client?.destroy();}
-});
+}
+export default protect(mediaUploadHandler);

@@ -29,3 +29,9 @@ test('checks both server file ownership and the live patient link',()=>{
  assert.equal(patientMayReadFile({...workspace,files:[]},session,{id:one,patient_id:'p1',mime:'image/jpeg'}),false);
  assert.equal(patientMayReadFile(workspace,session,{id:one,patient_id:'p1',mime:'application/pdf'}),false);
 });
+test('PDF documents obey the same live patient ownership as other media',()=>{
+ const documents={...workspace,files:workspace.files.map(f=>({...f,type:'application/pdf'}))};
+ assert.deepEqual(patientPortalView(documents,session).media.map(f=>f.id),[one]);
+ assert.equal(patientMayReadFile(documents,session,{id:one,patient_id:'p1',mime:'application/pdf'}),true);
+ assert.equal(patientMayReadFile(documents,session,{id:two,patient_id:'p2',mime:'application/pdf'}),false);
+});

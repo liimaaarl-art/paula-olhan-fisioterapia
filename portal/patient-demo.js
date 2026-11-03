@@ -8,15 +8,16 @@
   name:'Paula Olhan',
   media:[
    {id:'demo-photo',name:'Foto de exemplo · acolhimento',type:'image/jpeg'},
-   {id:'demo-video',name:'Vídeo de exemplo · demonstração do player',type:'video/mp4'}
+   {id:'demo-video',name:'Vídeo de exemplo',type:'video/mp4'},
+   {id:'demo-document',name:'Relatório de exemplo.pdf',type:'application/pdf'}
   ],
   records:[{type:'Registro de exemplo',date:dateIn(0),fields:[
-   {label:'Informações do atendimento',text:'Este é um exemplo de como as informações concluídas aparecem para o paciente. No acesso real, Paula compartilha o conteúdo vinculado ao cadastro de cada pessoa.'},
-   {label:'Orientações',text:'Fotos, vídeos e registros ficam reunidos neste espaço. O conteúdo desta demonstração é ilustrativo e não representa um atendimento.'}
+   {label:'Conduta',text:'Atividade funcional com exercícios de mobilidade e coordenação.'},
+   {label:'Resposta ao atendimento',text:'Registro ilustrativo de sessão concluída.'}
   ]}],
   appointments:[{date:dateIn(7),time:'09:00',status:'Exemplo de agendamento'}]
  };
- const files={'demo-photo':'/patient-demo-foto.jpg','demo-video':'/patient-demo-video.mp4'};
+ const files={'demo-photo':'/patient-demo-foto.jpg','demo-video':'/patient-demo-video.mp4','demo-document':'/patient-demo-documento.pdf'};
  window.OlhanPatientDemo={async request(body,query=''){
   if(body?.action==='login'){
    if(String(body.cpf||'').trim().toLowerCase()!=='admin'||body.password!=='olhan')throw Error('Usuário ou senha incorretos. Na demonstração, use admin e olhan.');

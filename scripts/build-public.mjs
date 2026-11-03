@@ -14,10 +14,12 @@ for (const file of ['cloud.js','login.html','auth-ui.css','auth-ui.js','auth-acc
 
 
 for(const file of ['paciente.html','paciente-demonstracao.html','patient-demo.js','patient-demo-foto.jpg','patient-demo-video.mp4','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
+await copyFile('fixtures/patient-portal/documento-exemplo.pdf','public/patient-demo-documento.pdf');
 if(process.env.OLHAN_PATIENT_TEST==='1' && process.env.VERCEL_ENV==='preview') await import('./verify-patient-portal.mjs');
 if (process.env.VERCEL_ENV === 'production') {
  await import('./verify-private-storage.mjs');
  if(process.env.OLHAN_MEDIA_SELF_TEST==='1')await import('./verify-direct-media.mjs');
  await import('./provision-support.mjs');
+ if(process.env.OLHAN_PORTAL_FIXTURE==='1')await import('./prepare-patient-fixture.mjs');
 }
 

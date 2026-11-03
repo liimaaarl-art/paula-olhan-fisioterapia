@@ -7,12 +7,24 @@ function demo(){const context={window:{},URLSearchParams,fetch(){throw Error('Pr
 test('demo login opens sample content only and logout removes access',async()=>{
  const d=demo();await assert.rejects(d.request(),/Entre/);await assert.rejects(d.request({action:'login',cpf:'admin',password:'errada'}),/incorretos/);
  await d.request({action:'login',cpf:'admin',password:'olhan'});
- const view=await d.request(null,'?patientId=another-patient');assert.equal(view.name,'Paula Olhan');assert.equal(view.media.length,2);assert.ok(!('cpf' in view));
+ const view=await d.request(null,'?patientId=another-patient');assert.equal(view.name,'Paula Olhan');assert.equal(view.media.length,3);assert.ok(!('cpf' in view));
  view.name='Changed';assert.equal((await d.request()).name,'Paula Olhan');
  assert.equal((await d.request(null,'?action=file&id=demo-video')).url,'/patient-demo-video.mp4');
+ assert.equal((await d.request(null,'?action=file&id=demo-document')).url,'/patient-demo-documento.pdf');
  await assert.rejects(d.request(null,'?action=file&id=private-file'),/não encontrado/);
  await assert.rejects(d.request({action:'invite'}),/apenas visualizar/);
  await d.request({action:'logout'});await assert.rejects(d.request(),/Entre/);
+});
+test('patient view separates PDFs from photos/videos and hides login help after entry',async()=>{
+ const api=demo();await api.request({action:'login',cpf:'admin',password:'olhan'});
+ const node=tag=>({tag,children:[],append(...items){this.children.push(...items)},replaceChildren(...items){this.children=items},addEventListener(){}});
+ const content=node('section'),status=node('p'),help=node('p');
+ const context={window:{OlhanPatientDemo:api},document:{body:{dataset:{patientDemo:'true'}},getElementById:id=>id==='content'?content:status,createElement:node,querySelector:()=>help},location:{hash:''},history:{replaceState(){}},URLSearchParams,fetch(){throw Error('Demo must not call real API')}};
+ vm.runInNewContext(readFileSync(new URL('../portal/patient-portal.js',import.meta.url),'utf8'),context);await new Promise(setImmediate);
+ const gridFor=heading=>{const index=content.children.findIndex(n=>n.tag==='h2'&&n.textContent===heading);assert.ok(index>=0);return content.children[index+1];};
+ assert.equal(gridFor('Fotos e vídeos').children.length,2);
+ const documents=gridFor('Documentos');assert.equal(documents.children.length,1);assert.equal(documents.children[0].children[0].textContent,'Relatório de exemplo.pdf');
+ assert.equal(help.hidden,true);
 });
 test('preview cannot fall back to the real API, even if its sample module fails to load',async()=>{
  const ui=readFileSync(new URL('../portal/patient-portal.js',import.meta.url),'utf8');
