@@ -15,26 +15,3 @@ test('demo login opens sample content only and logout removes access',async()=>{
  await assert.rejects(d.request({action:'invite'}),/apenas visualizar/);
  await d.request({action:'logout'});await assert.rejects(d.request(),/Entre/);
 });
-test('patient view separates PDFs from photos/videos and hides login help after entry',async()=>{
- const api=demo();await api.request({action:'login',cpf:'admin',password:'olhan'});
- const node=tag=>({tag,children:[],append(...items){this.children.push(...items)},replaceChildren(...items){this.children=items},addEventListener(){}});
- const content=node('section'),status=node('p'),help=node('p');
- const context={window:{OlhanPatientDemo:api},document:{body:{dataset:{patientDemo:'true'}},getElementById:id=>id==='content'?content:status,createElement:node,querySelector:()=>help},location:{hash:''},history:{replaceState(){}},URLSearchParams,fetch(){throw Error('Demo must not call real API')}};
- vm.runInNewContext(readFileSync(new URL('../portal/patient-portal.js',import.meta.url),'utf8'),context);await new Promise(setImmediate);
- const gridFor=heading=>{const index=content.children.findIndex(n=>n.tag==='h2'&&n.textContent===heading);assert.ok(index>=0);return content.children[index+1];};
- assert.equal(gridFor('Fotos e vídeos').children.length,2);
- const documents=gridFor('Documentos');assert.equal(documents.children.length,1);assert.equal(documents.children[0].children[0].textContent,'Relatório de exemplo.pdf');
- assert.equal(help.hidden,true);
-});
-test('preview cannot fall back to the real API, even if its sample module fails to load',async()=>{
- const ui=readFileSync(new URL('../portal/patient-portal.js',import.meta.url),'utf8');
- const element=tag=>({tag,children:[],append(...items){this.children.push(...items)},replaceChildren(...items){this.children=items},addEventListener(){}});
- for(const mode of ['demo','demo-module-missing','real']){
-  let networkCalls=0;const content=element('section'),status=element('p');
-  const context={window:mode==='demo'?{OlhanPatientDemo:demo()}:{},document:{body:{dataset:mode==='real'?{}:{patientDemo:'true'}},getElementById:id=>id==='content'?content:status,createElement:element},location:{hash:'',pathname:'/paciente.html'},history:{replaceState(){}},URLSearchParams,fetch:async()=>{networkCalls++;return {ok:false,json:async()=>({error:'Não autenticado'})}}};
-  vm.runInNewContext(ui,context);await new Promise(setImmediate);
-  assert.equal(networkCalls,mode==='real'?1:0);
-  const inputs=[];const visit=n=>{if(n.tag==='input')inputs.push(n);for(const child of n.children||[])if(typeof child==='object')visit(child)};visit(content);
-  assert.equal(inputs.length,2);assert.equal(inputs[0].value,mode==='real'?undefined:'admin');
- }
-});

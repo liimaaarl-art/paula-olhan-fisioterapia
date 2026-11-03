@@ -3,13 +3,13 @@
 (() => {
  'use strict';
  let signedIn=false;
- const dateIn=days=>{const d=new Date();d.setDate(d.getDate()+days);return d.toLocaleDateString('pt-BR');};
+ const dateIn=days=>{const d=new Date();d.setDate(d.getDate()+days);return new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo'}).format(d);};
  const sample={
   name:'Paula Olhan',
   media:[
-   {id:'demo-photo',name:'Foto de exemplo · acolhimento',type:'image/jpeg'},
-   {id:'demo-video',name:'Vídeo de exemplo',type:'video/mp4'},
-   {id:'demo-document',name:'Relatório de exemplo.pdf',type:'application/pdf'}
+   {id:'demo-photo',name:'Foto de exemplo · acolhimento',type:'image/jpeg',date:dateIn(0)},
+   {id:'demo-video',name:'Vídeo de exemplo',type:'video/mp4',date:dateIn(0)},
+   {id:'demo-document',name:'Relatório de exemplo.pdf',type:'application/pdf',date:dateIn(0)}
   ],
   records:[{type:'Registro de exemplo',date:dateIn(0),fields:[
    {label:'Conduta',text:'Atividade funcional com exercícios de mobilidade e coordenação.'},

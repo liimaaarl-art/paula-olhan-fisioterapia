@@ -15,6 +15,10 @@ for (const file of ['cloud.js','login.html','auth-ui.css','auth-ui.js','auth-acc
 
 for(const file of ['paciente.html','paciente-demonstracao.html','patient-demo.js','patient-demo-foto.jpg','patient-demo-video.mp4','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
 await copyFile('fixtures/patient-portal/documento-exemplo.pdf','public/patient-demo-documento.pdf');
+await mkdir('public/patient-fonts',{recursive:true});
+for(const file of ['BodoniModa.woff','Manrope.woff','Garet-Book.woff'])await copyFile('website/assets/fonts/'+file,'public/patient-fonts/'+file);
+const portalChecks=spawnSync(process.execPath,['--test','tests/patient-demo.test.mjs','tests/patient-navigation.test.mjs'],{stdio:'inherit'});
+if(portalChecks.status!==0)throw Error('Patient portal navigation checks failed');
 if(process.env.OLHAN_PATIENT_TEST==='1' && process.env.VERCEL_ENV==='preview') await import('./verify-patient-portal.mjs');
 if (process.env.VERCEL_ENV === 'production') {
  await import('./verify-private-storage.mjs');
