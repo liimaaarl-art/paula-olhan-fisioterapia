@@ -10,7 +10,9 @@ if(process.env.VERCEL_ENV!=='production'||process.env.OLHAN_PORTAL_FIXTURE!=='1'
 const password=process.env.OLHAN_PORTAL_FIXTURE_PASSWORD;
 if(!password||password.length<12)throw Error('Fixture password required');
 const sql=db(),patientId='portal-demo-paula-20261102',cpf='52998224725',birth='1990-01-01';
-const origin='https://paulaolhanfisioterapeuta.vercel.app',actor={id:'support:patient-portal-fixture',role:'admin'};
+const origin='https://paulaolhanfisioterapeuta.vercel.app';
+const [actor]=await sql`SELECT id,role FROM public.olhan_auth_user WHERE lower(email)=lower(${process.env.OLHAN_SUPPORT_EMAIL||''}) AND role='support' LIMIT 1`;
+assert.ok(actor?.id,'Use the existing reserved support account for the fixture audit trail');
 const headers={origin,host:new URL(origin).host,'content-type':'application/json'};
 const date=offset=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo'}).format(new Date(Date.now()+offset*86400000));
 async function invoke(handler,body,method='POST'){
