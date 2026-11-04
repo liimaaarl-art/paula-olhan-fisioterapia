@@ -22,7 +22,7 @@ async function setup(t,{value=fixture(),mode='demo',fileRequest}={}){
  w.HTMLMediaElement.prototype.load=function(){};
  w.document.body.dataset.patientDemo=mode==='real'?'false':'true';
  if(mode==='demo')w.OlhanPatientDemo={async request(body,query=''){
-  calls.push({body,query});if(body)return {ok:true};
+  calls.push({body,query});if(body)return {ok:true,avatarFileId:body.fileId};
   if(query){if(fileRequest)return fileRequest(query);return {url:'https://portal.test/private/'+new URLSearchParams(query.slice(1)).get('id')};}
   return value;
  }};
@@ -69,7 +69,7 @@ test('documents require date and file selection before requesting a private URL'
  assert.equal(doc.querySelectorAll('[data-day]').length,2);
  assert.equal(doc.querySelectorAll('[data-file-id]').length,0);
  assert.ok(!doc.body.textContent.includes('Relatório de avaliação.pdf'));
- const filter=doc.querySelector('input[type="date"]');filter.value='2099-01-04';filter.dispatchEvent(new w.Event('input',{bubbles:true}));
+ const mode=doc.querySelector('select[aria-label="Visualizar por"]');mode.value='day';mode.dispatchEvent(new w.Event('change',{bubbles:true}));const filter=doc.querySelector('input[aria-label="Filtrar por data"]');filter.value='2099-01-04';filter.dispatchEvent(new w.Event('input',{bubbles:true}));
  assert.equal(doc.querySelectorAll('[data-day]').length,1);
  click(doc,'[data-day="2099-01-04"]');
  assert.equal(doc.querySelectorAll('[data-file-id]').length,1);assert.equal(fileCalls(calls).length,0);
@@ -102,4 +102,22 @@ test('empty libraries retain navigation and missing demo code never calls the re
  click(doc,'.nav-button[data-page="videos"]');assert.ok(doc.querySelector('.empty-state'));assert.ok(doc.querySelector('.back-button'));
  const missing=await setup(t,{mode:'missing'});assert.equal(missing.network.length,0);assert.ok(missing.doc.querySelector('.auth-form'));
  const real=await setup(t,{mode:'real'});assert.equal(real.network.length,1);assert.equal(real.doc.querySelector('input[name="cpf"]').value,'');
+});
+
+test('month and custom range filters include boundary dates and reject reversed periods',async t=>{
+ const value=fixture();value.records.push({date:'2099-02-01',type:'Evolução',fields:[]});
+ const {doc,w}=await setup(t,{value});click(doc,'.nav-button[data-page="visits"]');
+ const mode=doc.querySelector('select[aria-label="Visualizar por"]');
+ const set=(label,value)=>{const el=doc.querySelector('[aria-label="'+label+'"]');el.value=value;el.dispatchEvent(new w.Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}));};
+ set('Visualizar por','month');set('Selecionar mês','2099-01');assert.equal(doc.querySelectorAll('[data-day]').length,2);
+ set('Selecionar mês','2099-02');assert.equal(doc.querySelectorAll('[data-day]').length,1);
+ set('Visualizar por','range');set('Data inicial','2099-01-04');set('Data final','2099-01-04');assert.equal(doc.querySelectorAll('[data-day]').length,1);
+ set('Data inicial','2099-01-06');assert.ok(doc.querySelector('[role="alert"]').textContent);assert.equal(doc.querySelectorAll('[data-day]').length,0);
+ set('Visualizar por','all');assert.equal(doc.querySelectorAll('[data-day]').length,3);
+});
+test('patient can select an existing own photo as profile image',async t=>{
+ const {doc,calls}=await setup(t);click(doc,'.nav-button[data-page="photos"]');click(doc,'[data-file-id="p1"]');await flush();
+ click(doc,'.profile-choice');await flush();
+ assert.ok(calls.some(c=>c.body?.action==='set-avatar'&&c.body.fileId==='p1'));
+ assert.equal(doc.querySelector('.avatar img').getAttribute('alt'),'Foto de perfil de Paula Olhan (Teste)');
 });

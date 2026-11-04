@@ -25,6 +25,7 @@
   }
   if(body?.action==='logout'){signedIn=false;return {ok:true};}
   if(!signedIn)throw Error('Entre na demonstração.');
+  if(body?.action==='set-avatar'){if(body.fileId!==null&&!sample.media.some(f=>f.id===body.fileId&&f.type.startsWith('image/')))throw Error('Foto não encontrada.');sample.avatarFileId=body.fileId;return {ok:true,avatarFileId:body.fileId};}
   if(body)throw Error('Esta demonstração permite apenas visualizar o conteúdo de exemplo.');
   const params=new URLSearchParams(query.replace(/^\?/,''));
   if(params.get('action')==='file'){

@@ -59,7 +59,7 @@ function header(title,description='',parent=null){if(parent)workspace.append(but
 function empty(message){const e=node('div','','empty-state');e.append(icon('document'),node('p',message));return e;}
 function selection(title,meta,kind,action,attributes={}){const b=button('',action,'selection-row');b.replaceChildren();const visual=node('span','','row-icon');visual.append(icon(kind));const words=node('span','','row-copy');words.append(node('span',title,'row-title'));if(meta)words.append(node('span',meta,'row-meta'));b.append(visual,words,icon('chevron'));for(const [k,v]of Object.entries(attributes))b.setAttribute(k,v);return b;}
 function enter(value){
- data={name:String(value.name||'Paciente'),media:(value.media||[]).map(f=>({...f,name:String(f.name||'Arquivo')})),records:value.records||[],appointments:value.appointments||[]};
+ data={avatarFileId:value.avatarFileId||null,name:String(value.name||'Paciente'),media:(value.media||[]).map(f=>({...f,name:String(f.name||'Arquivo')})),records:value.records||[],appointments:value.appointments||[]};
  document.body.dataset.portalState='authenticated';const intro=document.getElementById('intro');if(intro)intro.hidden=true;const help=document.querySelector('.help');if(help)help.hidden=true;
  content.replaceChildren();const shell=node('div','','portal-shell'),side=node('aside','','portal-sidebar');side.setAttribute('aria-label','Sua área do paciente');
  const account=node('div','','account-summary'),avatar=node('span',(data.name.trim()[0]||'P').toUpperCase(),'avatar'),identity=node('div');identity.append(node('span','Área do paciente','account-label'),node('p',data.name,'account-name'));account.append(avatar,identity);side.append(account);
@@ -67,7 +67,18 @@ function enter(value){
  for(const [page,label,kind]of [['home','Início','home'],['videos','Vídeos','video'],['photos','Fotos','photo'],['documents','Documentos','document'],['visits','Atendimentos','visits'],['schedule','Agendamentos','calendar']]){const b=button(label,()=>go({page}),'nav-button',kind);b.dataset.page=page;nav.append(b);}side.append(nav);
  const actions=node('div','','account-actions');actions.append(button('Trocar senha',changePassword,'text-button','account'),button('Sair',async()=>{try{await api({action:'logout'});login();}catch(error){handleError(error);}},'text-button','logout'));side.append(actions);
  const note=node('div','','private-note');note.append(icon('lock'),node('span','Acesso individual'));side.append(note);
- workspace=node('section','','portal-workspace');workspace.setAttribute('aria-label','Conteúdo da minha área');shell.append(side,workspace);content.append(shell);current={page:'home'};render();
+ workspace=node('section','','portal-workspace');workspace.setAttribute('aria-label','Conteúdo da minha área');shell.append(side,workspace);content.append(shell);current={page:'home'};render();void updateAvatar();
+}
+async function updateAvatar(){
+ const owner=data,avatar=content.querySelector('.avatar');if(!owner||!avatar)return;avatar.replaceChildren(document.createTextNode((owner.name.trim()[0]||'P').toUpperCase()));
+ if(!owner.avatarFileId)return;
+ try{const result=await api(undefined,'?action=file&id='+encodeURIComponent(owner.avatarFileId));if(data!==owner)return;
+ const img=document.createElement('img');img.alt='Foto de perfil de '+owner.name;img.src=result.url;img.onerror=()=>{if(data===owner)avatar.replaceChildren(document.createTextNode((owner.name.trim()[0]||'P').toUpperCase()));};avatar.replaceChildren(img);
+ }catch{}
+}
+async function setAvatar(id){
+ try{const result=await api({action:'set-avatar',fileId:id});data.avatarFileId=result.avatarFileId;await updateAvatar();say(id?'Foto de perfil atualizada.':'Foto de perfil removida.');}
+ catch(error){handleError(error);}
 }
 function renderHome(){
  const welcome=node('div','','welcome-panel');welcome.append(node('p','Bem-vindo à sua área','eyebrow'),node('h1','Olá, '+data.name.split(' ')[0]+'.'),node('p','Seus arquivos e atendimentos, organizados para você.','welcome-text'));const badge=node('span','Meu cuidado','welcome-badge');welcome.append(badge);workspace.append(welcome);
@@ -91,9 +102,22 @@ function renderLibrary(kind,subset=null,parent={page:'home'},title=''){
 function renderDays(documentsOnly){
  const list=days(documentsOnly);header(documentsOnly?'Documentos':'Atendimentos',documentsOnly?'Escolha uma data para consultar seus documentos.':'Escolha uma data para consultar evoluções e relatórios.',{page:'home'});
  if(!list.length){workspace.append(empty(documentsOnly?'Nenhum documento disponível.':'Nenhum atendimento concluído disponível.'));return;}
- const toolbar=node('div','','library-toolbar'),label=node('label','','date-filter');label.append(node('span','Filtrar por data'));const filter=node('input');filter.type='date';filter.setAttribute('aria-label','Filtrar por data');label.append(filter);toolbar.append(label);workspace.append(toolbar);
+ const toolbar=node('div','','period-toolbar'),modeLabel=node('label','','date-filter');modeLabel.append(node('span','Visualizar por'));
+ const mode=node('select');mode.setAttribute('aria-label','Visualizar por');
+ for(const [value,text]of [['all','Todas as datas'],['day','Dia'],['month','Mês'],['range','Período']]){const option=node('option',text);option.value=value;mode.append(option);}modeLabel.append(mode);toolbar.append(modeLabel);
+ const fields={};for(const [key,title,type]of [['day','Filtrar por data','date'],['month','Selecionar mês','month'],['from','Data inicial','date'],['to','Data final','date']]){
+  const label=node('label','','date-filter'),input=node('input');label.append(node('span',title));input.type=type;input.setAttribute('aria-label',title);label.append(input);toolbar.append(label);fields[key]={label,input};}
+ const error=node('p','','period-error');error.setAttribute('role','alert');workspace.append(toolbar,error);
  const rows=node('div','','date-list');workspace.append(rows);
- const draw=()=>{rows.replaceChildren();const visible=list.filter(d=>!filter.value||d.key===filter.value);if(!visible.length){rows.append(empty('Nenhum registro nessa data.'));return;}for(const d of visible){const details=[d.records.length?plural(d.records.length,'registro','registros'):'',d.files.length?plural(d.files.length,'documento','documentos'):''].filter(Boolean).join(' · ');rows.append(selection(dayLabel(d.key),details,'calendar',()=>go({page:documentsOnly?'document-day':'visit-day',date:d.key,section:documentsOnly?'documents':'visits'}),{'data-day':d.key}));}};filter.oninput=draw;draw();
+ const draw=()=>{
+  for(const [key,field]of Object.entries(fields))field.label.hidden=!(mode.value===key||(mode.value==='range'&&['from','to'].includes(key)));
+  rows.replaceChildren();error.textContent='';
+  const from=fields.from.input.value,to=fields.to.input.value;
+  if(mode.value==='range'&&from&&to&&from>to){error.textContent='A data inicial deve ser anterior ou igual à data final.';return;}
+  const visible=list.filter(d=>mode.value==='day'?(!fields.day.input.value||d.key===fields.day.input.value):mode.value==='month'?(!fields.month.input.value||d.key.startsWith(fields.month.input.value+'-')):mode.value==='range'?((!from||d.key>=from)&&(!to||d.key<=to)&&d.key!=='undated'):true);
+  if(!visible.length){rows.append(empty('Nenhum registro no período selecionado.'));return;}
+  for(const d of visible){const details=[d.records.length?plural(d.records.length,'registro','registros'):'',d.files.length?plural(d.files.length,'documento','documentos'):''].filter(Boolean).join(' · ');rows.append(selection(dayLabel(d.key),details,'calendar',()=>go({page:documentsOnly?'document-day':'visit-day',date:d.key,section:documentsOnly?'documents':'visits'}),{'data-day':d.key}));}
+ };mode.onchange=draw;for(const field of Object.values(fields))field.input.oninput=draw;draw();
 }
 function renderDay(){
  const d=days().find(x=>x.key===current.date);header('Atendimentos de '+dayLabel(current.date),'Selecione o registro ou documento que deseja consultar.',{page:'visits'});
@@ -109,7 +133,7 @@ function renderRecord(){
 }
 async function renderFile(stamp){
  const f=data.media.find(x=>x.id===current.id),view=current;header(f?.name||'Arquivo',f?dayLabel(f.date):'',view.parent||{page:'home'});if(!f){workspace.append(empty('Arquivo não encontrado.'));return;}
- const back=button('Voltar à lista de arquivos',()=>go(view.parent||{page:'home'}),'action secondary','back'),stage=node('div','','media-stage');stage.append(node('p','Carregando arquivo…','loading-state'));workspace.append(back,stage);
+ const back=button('Voltar à lista de arquivos',()=>go(view.parent||{page:'home'}),'action secondary','back'),stage=node('div','','media-stage');stage.append(node('p','Carregando arquivo…','loading-state'));workspace.append(back,stage);if(f.type.startsWith('image/')){const choose=button('Usar como foto de perfil',()=>setAvatar(f.id),'action profile-choice','account');workspace.append(choose);}
  const ids=view.ids||[],position=ids.indexOf(f.id);if(ids.length>1){const pagination=node('div','','file-pagination');const previous=button('Anterior',()=>go({...view,id:ids[position-1]}),'action secondary','back'),next=button('Próximo',()=>go({...view,id:ids[position+1]}),'action secondary','arrow');previous.disabled=position<=0;next.disabled=position>=ids.length-1;pagination.append(previous,node('span','Arquivo '+(position+1)+' de '+ids.length),next);workspace.append(pagination);}
  try{
   const result=await api(undefined,'?action=file&id='+encodeURIComponent(f.id));if(stamp!==epoch)return;const url=new URL(result.url,location.origin);if(url.protocol!=='https:')throw Error('Não foi possível abrir este arquivo.');stage.replaceChildren();
