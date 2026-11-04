@@ -31,3 +31,5 @@ body[data-portal-state="authenticated"] main{margin:30px auto}.portal-shell{disp
 .period-toolbar select{min-height:46px;border:1px solid var(--line);border-radius:10px;padding:9px 32px 9px 12px;background:#fff;color:var(--ink)}
 .period-error{color:#854526;font-size:13px}.period-error:empty{display:none}.profile-choice{margin:16px 0 0}
 @media(max-width:760px){.site-header .brand img{width:160px}.period-toolbar{gap:12px}.period-toolbar .date-filter{flex:1 1 145px;min-width:0}.period-toolbar input,.period-toolbar select{width:100%;min-width:0}}
+
+.intro h1,.auth-form h2,.welcome-panel h1,.section-heading,.category-title,.next-appointment h2,.page-heading h1,.document-stage h2,.appointment-card h2{font-weight:500}
