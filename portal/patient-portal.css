@@ -33,3 +33,6 @@ body[data-portal-state="authenticated"] main{margin:30px auto}.portal-shell{disp
 @media(max-width:760px){.site-header .brand img{width:160px}.period-toolbar{gap:12px}.period-toolbar .date-filter{flex:1 1 145px;min-width:0}.period-toolbar input,.period-toolbar select{width:100%;min-width:0}}
 
 .intro h1,.auth-form h2,.welcome-panel h1,.section-heading,.category-title,.next-appointment h2,.page-heading h1,.document-stage h2,.appointment-card h2{font-weight:500}
+
+/* Mesmo ajuste óptico e espaçamento dos títulos do site Olhan. */
+.intro h1,.auth-form h2,.welcome-panel h1,.section-heading,.category-title,.next-appointment h2,.page-heading h1,.document-stage h2,.appointment-card h2{font-synthesis:none;font-optical-sizing:none;font-variation-settings:'opsz' 9;line-height:1.16;letter-spacing:-.025em}
