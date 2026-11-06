@@ -2,6 +2,7 @@ import { signedMediaUrl } from '../lib/media-sign.js';
 import { randomUUID } from 'node:crypto';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { protect } from '../lib/auth-guard.js';
+import { collaboratorOrAdminSession } from '../lib/collaborator-auth.js';
 import { r2Config, r2Client } from '../lib/r2.js';
 import { db, json } from '../lib/db.js';
 import { sameOrigin } from '../lib/ai-session.js';
@@ -13,7 +14,7 @@ export function fileHandler({sqlFactory=db,config=r2Config,clientFactory=r2Clien
  try {
   if(req.method==='GET'){
    const id=req.query?.id;if(typeof id!=='string'||!/^[0-9a-f-]{36}$/.test(id))return json(res,400,{error:'Arquivo inválido.'});
-   const rows=await sql`SELECT f.* FROM (SELECT id,patient_id,object_key,name,mime,size FROM public.olhan_cloud_files UNION ALL SELECT id,patient_id,object_key,name,mime,size FROM public.olhan_cloud_files_large WHERE ready) f JOIN public.olhan_workspace w ON w.id='olhan' WHERE f.id=${id}::uuid AND EXISTS (SELECT 1 FROM jsonb_array_elements(w.data->'files') x WHERE COALESCE(x->>'cloudId',x->>'id')=f.id::text AND x->>'patient'=f.patient_id)`;
+   const rows=await sql`SELECT f.* FROM (SELECT id,patient_id,object_key,name,mime,size FROM public.olhan_cloud_files UNION ALL SELECT id,patient_id,object_key,name,mime,size FROM public.olhan_cloud_files_large WHERE ready) f JOIN public.olhan_workspace w ON w.id='olhan' WHERE f.id=${id}::uuid AND EXISTS (SELECT 1 FROM jsonb_array_elements(w.data->'files') x WHERE COALESCE(x->>'cloudId',x->>'id')=f.id::text AND x->>'patient'=f.patient_id AND (${req.olhanUser.role!=='collaborator'} OR EXISTS (SELECT 1 FROM jsonb_array_elements(w.data->'patients') p WHERE p->>'id'=f.patient_id AND p->>'pro'=${req.olhanTeamId})))`;
    if(!rows.length)return json(res,404,{error:'Arquivo não encontrado no prontuário.'});
    const file=rows[0];if(file.size>3145728){res.setHeader('Cache-Control','private, no-store');res.setHeader('Location',await signedMediaUrl(cfg,file.object_key));res.status(302);return res.end();}client=clientFactory(cfg);
    const object=await client.send(new GetObjectCommand({Bucket:cfg.bucket,Key:file.object_key}),{abortSignal:AbortSignal.timeout(15000)});
@@ -29,7 +30,8 @@ export function fileHandler({sqlFactory=db,config=r2Config,clientFactory=r2Clien
   if(!types.has(b.type)||typeof b.name!=='string'||!b.name.trim()||b.name.length>240||typeof b.patient!=='string'||typeof b.base64!=='string'||b.base64.length>4194304||!b.base64||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b.base64))return json(res,400,{error:'Arquivo inválido. Use PDF, imagem ou vídeo de até 3 MB.'});
   const bytes=Buffer.from(b.base64,'base64');if(!bytes.length||bytes.length>3145728)return json(res,413,{error:'Limite de 3 MB por arquivo.'});
   const state=await sql`SELECT data FROM public.olhan_workspace WHERE id='olhan'`;
-  const patientExists=state[0]?.data?.patients?.some(p=>p.id===b.patient);
+  const patient=state[0]?.data?.patients?.find(p=>p.id===b.patient);const patientExists=!!patient;
+  if(req.olhanUser.role==='collaborator'&&(!patient||patient.pro!==req.olhanTeamId))return json(res,404,{error:'Paciente não atribuído a esta conta.'});
   // On first migration only the administrator may upload before initial state.
   if(!patientExists && !(req.olhanUser.role==='admin'&&(!state.length||b.migration===true)))return json(res,404,{error:'Salve o cadastro do paciente antes de anexar.'});
   const id=randomUUID(),key='olhan/private/'+id;
@@ -38,5 +40,5 @@ export function fileHandler({sqlFactory=db,config=r2Config,clientFactory=r2Clien
   return json(res,200,{id,data:'/api/files?id='+id,name:b.name,type:b.type,size:bytes.length});
  }catch{return json(res,503,{error:'Não foi possível confirmar o arquivo no servidor. O arquivo local foi preservado.'});}finally{client?.destroy?.();}
 };}
-export default protect(fileHandler());
+export default protect(fileHandler(),collaboratorOrAdminSession);
 
