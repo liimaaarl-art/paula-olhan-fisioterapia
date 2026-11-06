@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { CreateMultipartUploadCommand,UploadPartCommand,CompleteMultipartUploadCommand,AbortMultipartUploadCommand,PutObjectCommand,GetObjectCommand,DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { protect } from '../lib/auth-guard.js';
+import { collaboratorOrAdminSession } from '../lib/collaborator-auth.js';
 import { db,json } from '../lib/db.js';
 import { sameOrigin } from '../lib/ai-session.js';
 import { r2Config,r2Client } from '../lib/r2.js';
@@ -14,7 +15,7 @@ export async function mediaUploadHandler(req,res){
  const b=req.body||{},sql=db();let client;
  try{
   const state=await sql`SELECT data FROM public.olhan_workspace WHERE id='olhan'`;
-  if(!state[0]?.data?.patients?.some(p=>p.id===b.patient))return json(res,404,{error:'Salve o cadastro do paciente primeiro.'});
+  const patient=state[0]?.data?.patients?.find(p=>p.id===b.patient);if(!patient)return json(res,404,{error:'Salve o cadastro do paciente primeiro.'});if(req.olhanUser.role==='collaborator'&&patient.pro!==req.olhanTeamId)return json(res,404,{error:'Paciente não atribuído a esta conta.'});
   client=r2Client(cfg);const send=command=>client.send(command,{abortSignal:AbortSignal.timeout(45000)});
   if(b.action==='init'){
    if(!types.has(b.type)||typeof b.name!=='string'||!b.name.trim()||b.name.length>240||!Number.isSafeInteger(b.size)||b.size<1||b.size>52428800)return json(res,400,{error:'Use PDF, imagem ou vídeo MP4/WebM de até 50 MB.'});
@@ -57,4 +58,4 @@ export async function mediaUploadHandler(req,res){
   return json(res,400,{error:'Operação inválida.'});
  }catch{return json(res,503,{error:'O arquivo não foi confirmado. Tente novamente.'});}finally{client?.destroy();}
 }
-export default protect(mediaUploadHandler);
+export default protect(mediaUploadHandler,collaboratorOrAdminSession);

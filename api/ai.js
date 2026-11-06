@@ -1,4 +1,5 @@
 import { protect } from '../lib/auth-guard.js';
+import { collaboratorOrAdminSession } from '../lib/collaborator-auth.js';
 import { generateText, Output, transcribe } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
 import { json } from '../lib/db.js';
@@ -34,5 +35,5 @@ export async function handler(req,res){
   }catch(e){const status=e.statusCode===429?429:502;return json(res,status,{error:status===429?'A IA atingiu o limite de uso. Tente novamente mais tarde.':'A IA não conseguiu concluir. Seu texto e os dados do sistema foram preservados. Confira a configuração ou tente novamente.'});}
 }
 
-export default protect(handler);
+export default protect(handler,collaboratorOrAdminSession);
 

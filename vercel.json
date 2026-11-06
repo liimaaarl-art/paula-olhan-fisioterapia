@@ -4,7 +4,7 @@
       "maxDuration": 120
     },
     "api/app.js": {
-      "includeFiles": "index.html"
+      "includeFiles": "*.html"
     },
     "api/auth-handler.js": {
       "maxDuration": 60
@@ -13,6 +13,9 @@
       "maxDuration": 60
     },
     "api/media-upload.js": {
+      "maxDuration": 60
+    },
+    "api/collaborator-data.js": {
       "maxDuration": 60
     }
   },

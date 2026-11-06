@@ -3,20 +3,27 @@ import { readFile } from 'node:fs/promises';
 import { workspace } from '../lib/workspace.js';
 import { adminSession } from '../lib/auth.js';
 import { incomingHeaders } from '../lib/auth-guard.js';
+import { collaboratorSession } from '../lib/collaborator-auth.js';
 
-let source;
+let source, collaboratorSource;
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('X-Frame-Options', 'DENY');
   if (!['GET','HEAD'].includes(req.method)) { res.status(405); return res.end(); }
   try {
-    const session = await adminSession(incomingHeaders(req));
-    if (!session) { res.status(302); res.setHeader('Location', '/login.html'); return res.end(); }
+    const headers=incomingHeaders(req);const session = await adminSession(headers);
+    const collaborator=session?null:await collaboratorSession(headers);
+    if (!session && !collaborator) { res.status(302); res.setHeader('Location', '/login.html'); return res.end(); }
+    if(collaborator){
+      collaboratorSource ||= await readFile(new URL('../collaborator.html',import.meta.url),'utf8');
+      res.status(200);res.setHeader('Content-Type','text/html; charset=utf-8');
+      return res.end(req.method==='HEAD'?'':collaboratorSource);
+    }
     source ||= await readFile(new URL('../index.html', import.meta.url), 'utf8');
     const cloud = await workspace();
     if(cloud.data)try{await syncPatientAccounts((await import('../lib/db.js')).db(),cloud.data,process.env.BETTER_AUTH_SECRET);}catch{/* Saving and invitation creation retry enrollment. */}
     const bootstrap = JSON.stringify({...cloud,role:session.user.role}).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
-    const html = source.replace('<head>', '<head><script>window.__OLHAN_CLOUD__='+bootstrap+';</script>').replace('</body>', '<script src="/cloud.js"></script><script src="/auth-account.js"></script><script src="/staff-patient-access.js"></script></body>');
+    const html = source.replace('<head>', '<head><script>window.__OLHAN_CLOUD__='+bootstrap+';</script>').replace('</body>', '<script src="/cloud.js"></script><script src="/auth-account.js"></script><script src="/staff-patient-access.js"></script><script src="/collaborator-admin.js"></script></body>');
     res.status(200); res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.end(req.method === 'HEAD' ? '' : html);
   } catch { res.status(503); res.setHeader('Content-Type','text/plain; charset=utf-8'); return res.end('Acesso temporariamente indisponível. Tente novamente em instantes.'); }
