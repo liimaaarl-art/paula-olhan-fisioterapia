@@ -15,7 +15,7 @@
     "api/media-upload.js": {
       "maxDuration": 60
     },
-    "api/collaborator-provision.js": {
+    "api/collaborator-data.js": {
       "maxDuration": 60
     }
   },
