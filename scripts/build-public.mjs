@@ -17,7 +17,7 @@ for(const file of ['paciente.html','patient-portal.js','patient-portal.css','sta
 await copyFile('website/assets/logo-olhan-transparente.png','public/patient-logo.png');
 await mkdir('public/patient-fonts',{recursive:true});
 for(const file of ['BodoniModa.woff','Manrope.woff','Garet-Book.woff'])await copyFile('website/assets/fonts/'+file,'public/patient-fonts/'+file);
-const portalChecks=spawnSync(process.execPath,['--test','tests/patient-demo.test.mjs','tests/patient-navigation.test.mjs','tests/patient-profile.test.mjs'],{stdio:'inherit'});
+const portalChecks=spawnSync(process.execPath,['--test','tests/patient-demo.test.mjs','tests/patient-navigation.test.mjs','tests/patient-profile.test.mjs','tests/production-readiness.test.mjs'],{stdio:'inherit'});
 if(portalChecks.status!==0)throw Error('Patient portal navigation checks failed');
 if(process.env.OLHAN_PATIENT_TEST==='1' && process.env.VERCEL_ENV==='preview') await import('./verify-patient-portal.mjs');
 if (process.env.VERCEL_ENV === 'production') {
