@@ -577,15 +577,15 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
   window.printContractPDF=function(cid){const c=db.contracts.find(x=>x.id===cid);if(!c)return;const pr=db.provider||contractProviderDefaults;printWindow('Contrato de Prestação de Serviços de Fisioterapia',`<div class="contract-body">${esc(c.body||contractTemplate(c))}</div><div class="signature-print"><div>${c.clientSignature?`<img src="${c.clientSignature}">`:''}<b>${esc(c.clientName)}</b><br><span class="meta">Contratante · CPF ${esc(c.clientCpf)}</span></div><div>${c.providerSignature?`<img src="${c.providerSignature}">`:''}<b>${esc(pr.name)}</b><br><span class="meta">Contratada · ${esc(pr.crefito)}</span></div></div>${c.signedAt?`<p class="meta">Assinado no aplicativo em ${new Date(c.signedAt).toLocaleString('pt-BR')}.</p>`:''}`)};
 
   window.contracts=function(){
-    return head('Contratos','Preencha, edite, assine no aplicativo e gere o PDF final.',btn('Novo contrato','contractForm()','plus'))+`<div class="toolbar"><button class="btn secondary small" onclick="providerSettingsForm()">${ic('settings')} Dados da contratada</button><span class="spacer"></span><span class="tag">${db.contracts.length} contrato${db.contracts.length===1?'':'s'}</span></div><div class="contract-grid">${db.contracts.length?db.contracts.slice().sort((a,b)=>(b.created||'').localeCompare(a.created||'')).map(c=>`<section class="card contract-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h3>${esc(c.clientName||patient(c.patient).name)}</h3><p>${esc(patient(c.patient).name)} · ${money(c.sessionValue)}</p></div>${c.status==='Assinado'?'<span class="contract-signed">✓ Assinado</span>':tag('Rascunho')}</div><div class="contract-meta"><span>CPF: ${esc(c.clientCpf||'Não informado')}</span><span>${esc(c.clientAddress||'Endereço não informado')}</span><span>${c.signedAt?'Assinado em '+new Date(c.signedAt).toLocaleString('pt-BR'):'Atualizado em '+new Date(c.updated||c.created).toLocaleString('pt-BR')}</span></div><div class="contract-actions">${c.status==='Assinado'?`${btn('Gerar PDF',`printContractPDF('${c.id}')`,'download','soft')}${btn('Nova versão',`duplicateContract('${c.id}')`,'file','secondary small')}`:`${btn('Editar',`contractForm('${c.id}')`,'settings','secondary small')}${btn('Assinar',`signContract('${c.id}')`,'signature','soft')}${btn('Excluir',`deleteContract('${c.id}')`,'close','secondary small')}`}</div></section>`).join(''):'<div class="empty">Nenhum contrato. Crie o primeiro a partir do cadastro de um paciente.</div>'}</div><p class="v5-setting-note" style="margin-top:18px"><b>Segurança:</b> esta versão HTML é uma demonstração local. Para uso real com dados de saúde, documentos, assinaturas e CPF, a versão de produção deve usar autenticação, banco de dados e armazenamento protegido.</p>`;
+    return head('Contratos','Preencha, edite, assine no aplicativo e gere o PDF final.',btn('Novo contrato','contractForm()','plus'))+`<div class="toolbar"><button class="btn secondary small" onclick="providerSettingsForm()">${ic('settings')} Dados da contratada</button><span class="spacer"></span><span class="tag">${db.contracts.length} contrato${db.contracts.length===1?'':'s'}</span></div><div class="contract-grid">${db.contracts.length?db.contracts.slice().sort((a,b)=>(b.created||'').localeCompare(a.created||'')).map(c=>`<section class="card contract-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h3>${esc(c.clientName||patient(c.patient).name)}</h3><p>${esc(patient(c.patient).name)} · ${money(c.sessionValue)}</p></div>${c.status==='Assinado'?'<span class="contract-signed">✓ Assinado</span>':tag('Rascunho')}</div><div class="contract-meta"><span>CPF: ${esc(c.clientCpf||'Não informado')}</span><span>${esc(c.clientAddress||'Endereço não informado')}</span><span>${c.signedAt?'Assinado em '+new Date(c.signedAt).toLocaleString('pt-BR'):'Atualizado em '+new Date(c.updated||c.created).toLocaleString('pt-BR')}</span></div><div class="contract-actions">${c.status==='Assinado'?`${btn('Gerar PDF',`printContractPDF('${c.id}')`,'download','soft')}${btn('Nova versão',`duplicateContract('${c.id}')`,'file','secondary small')}`:`${btn('Editar',`contractForm('${c.id}')`,'settings','secondary small')}${btn('Assinar',`signContract('${c.id}')`,'signature','soft')}${btn('Excluir',`deleteContract('${c.id}')`,'close','secondary small')}`}</div></section>`).join(''):'<div class="empty">Nenhum contrato. Crie o primeiro a partir do cadastro de um paciente.</div>'}</div>`;
   };
 
   importBackup=async function(el){
     try{if(!el.files[0])return;if(el.files[0].size>15*1024*1024)throw Error();let d=JSON.parse(await el.files[0].text());validateBackup(d);if(!confirm('Substituir os dados locais pelo backup selecionado?'))return;db=d;migrateV5();patientId=null;commit('Backup restaurado e atualizado para a versão V5.')}catch{toast('Backup inválido. Use um JSON exportado por este aplicativo.')}
   };
-  resetDemo=function(){if(confirm('Apagar alterações e restaurar todos os dados de demonstração?')){db=seed();migrateV5();commit('Exemplos restaurados.')}};
+  resetDemo=function(){toast('Esta opção não está disponível.');};
 
-  settings=function(){return head('Configurações','Sua base para a próxima etapa do projeto.')+`<section class="card"><div class="settingrow"><div><h3>Dados da contratada</h3><p>Nome, CPF, RG, CREFITO e endereço usados nos contratos.</p></div>${btn('Editar dados','providerSettingsForm()','settings','secondary')}</div><div class="settingrow"><div><h3>Dados de demonstração</h3><p>As alterações ficam neste navegador. Não há sincronização entre dispositivos.</p></div>${btn('Exportar backup','exportBackup()','download','secondary')}</div><div class="settingrow"><div><h3>Restaurar backup</h3><p>Importe um backup JSON exportado por esta versão.</p></div><label class="btn secondary">Importar JSON<input type="file" accept=".json" hidden onchange="importBackup(this)"></label></div><div class="settingrow"><div><h3>Versão HTML independente</h3><p>Baixe o aplicativo atualizado para abrir no navegador.</p></div>${btn('Baixar HTML','downloadHtml()','download','secondary')}</div><div class="settingrow"><div><h3>Backend e segurança</h3><p>Para produção: autenticação, permissões, banco de dados, anexos seguros, histórico e assinatura eletrônica com trilha de auditoria.</p></div></div><div class="settingrow"><div><h3>Recomeçar demonstração</h3><p>Apaga alterações locais e restaura os exemplos iniciais.</p></div>${btn('Restaurar exemplos','resetDemo()','back','secondary')}</div></section>`};
+  settings=function(){return head('Configurações','Gerencie os dados do consultório.')+`<section class="card"><div class="settingrow"><div><h3>Dados da contratada</h3><p>Dados utilizados nos contratos.</p></div>${btn('Editar dados','providerSettingsForm()','settings','secondary')}</div><div class="settingrow"><div><h3>Exportar cópia</h3><p>Baixe uma cópia dos dados do sistema para guardar em local seguro.</p></div>${btn('Exportar backup','exportBackup()','download','secondary')}</div></section>`};
 
   render=function(){
     document.getElementById('nav').innerHTML=navs.map(n=>`<button class="${view===n[0]?'active':''}" onclick="go('${n[0]}')">${ic(n[2])}${n[1]}</button>`).join('');
@@ -1204,71 +1204,7 @@ Limeira/SP, ${dateText}.`;
 })();
 
 </script>
-<style id="demo-limit-style">
-.demo-limit-banner{margin:0 0 18px;padding:14px 16px;border:1px solid rgba(173,111,63,.22);background:#fff8f0;border-radius:14px;color:#6f4a32;display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.45}.demo-limit-banner strong{display:block;color:#5d3c28;margin-bottom:2px}.demo-limit-banner .demo-limit-dot{width:10px;height:10px;border-radius:999px;background:#c78556;margin-top:5px;flex:0 0 auto}.demo-limit-banner.demo-limit-full{background:#fff2ef;border-color:#e6b5aa;color:#8b4336}.demo-limit-banner.demo-limit-full .demo-limit-dot{background:#cf6d5b}
-</style>
-<script id="demo-limit-layer">
-(function(){
-  const DEMO_PATIENT_LIMIT=5;
-  const DEMO_FINANCE_LIMIT=5;
-  const DEMO_SEED_PATIENT_IDS=new Set(['p1','p2','p3','p4']);
-  const patientDemoCount=()=>Number((db?.patients||[]).filter(p=>!DEMO_SEED_PATIENT_IDS.has(String(p.id))).length);
-  const financeCount=()=>Number(db?.invoices?.length||0)+Number(db?.cashEntries?.length||0);
-  const patientRemaining=()=>Math.max(0,DEMO_PATIENT_LIMIT-patientDemoCount());
-  const financeRemaining=()=>Math.max(0,DEMO_FINANCE_LIMIT-financeCount());
-  const limitToast=(label)=>toast(`Versão de demonstração: limite de ${label} atingido. O restante será liberado na versão final.`);
 
-  const oldPatientForm=patientForm;
-  patientForm=window.patientForm=function(pid){
-    if(!pid && patientDemoCount()>=DEMO_PATIENT_LIMIT){
-      return limitToast('5 novos pacientes');
-    }
-    return oldPatientForm(pid);
-  };
-
-  const oldInvoiceForm=invoiceForm;
-  invoiceForm=window.invoiceForm=function(){
-    if(financeCount()>=DEMO_FINANCE_LIMIT){
-      return limitToast('5 registros financeiros');
-    }
-    return oldInvoiceForm.apply(this,arguments);
-  };
-
-  const oldCashEntryForm=window.cashEntryForm||cashEntryForm;
-  cashEntryForm=window.cashEntryForm=function(){
-    if(financeCount()>=DEMO_FINANCE_LIMIT){
-      return limitToast('5 registros financeiros');
-    }
-    return oldCashEntryForm.apply(this,arguments);
-  };
-
-  const oldRegisterTeamPayment=window.registerTeamPayment;
-  if(typeof oldRegisterTeamPayment==='function'){
-    window.registerTeamPayment=function(){
-      if(financeCount()>=DEMO_FINANCE_LIMIT){
-        return limitToast('5 registros financeiros');
-      }
-      return oldRegisterTeamPayment.apply(this,arguments);
-    };
-  }
-
-  const oldPatientsView=patients;
-  patients=function(){
-    const used=patientDemoCount(),remaining=patientRemaining(),full=remaining===0;
-    const banner=`<div class="demo-limit-banner ${full?'demo-limit-full':''}"><span class="demo-limit-dot"></span><div><strong>Versão de demonstração · Novos pacientes: ${used}/${DEMO_PATIENT_LIMIT}</strong>${full?'Limite de teste atingido. Os cadastros existentes continuam disponíveis normalmente; novos pacientes serão liberados na versão final.':`Você ainda pode cadastrar ${remaining} novo${remaining===1?'':'s'} paciente${remaining===1?'':'s'} para testar.`}</div></div>`;
-    return banner+oldPatientsView();
-  };
-
-  const oldFinanceView=finance;
-  finance=function(){
-    const used=financeCount(),remaining=financeRemaining(),full=remaining===0;
-    const banner=`<div class="demo-limit-banner ${full?'demo-limit-full':''}"><span class="demo-limit-dot"></span><div><strong>Versão de demonstração · Registros financeiros: ${used}/${DEMO_FINANCE_LIMIT}</strong>${full?'Limite de teste atingido. Os registros existentes continuam disponíveis; novos fechamentos e lançamentos serão liberados na versão final.':`Você ainda pode criar ${remaining} registro${remaining===1?'':'s'} financeiro${remaining===1?'':'s'} para testar.`}</div></div>`;
-    return banner+oldFinanceView();
-  };
-
-  window.DEMO_LIMITS={newPatients:DEMO_PATIENT_LIMIT,financialRecords:DEMO_FINANCE_LIMIT};
-})();
-</script>
 <style>[data-appointment-id]{touch-action:none}.touch-drag-preview{position:fixed;z-index:9999;pointer-events:none;max-width:210px;padding:12px;border-radius:10px;background:#315f59;color:white;box-shadow:0 5px 20px #0004}.touch-drop-target{outline:3px solid #e39361;outline-offset:-3px}</style>
 <script>
 (function(){
@@ -1354,17 +1290,7 @@ Limeira/SP, ${dateText}.`;
     save();render();toast(changeSeries?`${moved.length} atendimentos futuros foram atualizados.`:'Somente este atendimento foi atualizado.');
   };
 
-  // Portal demonstrativo do paciente/familiar. Em produção, o login deve usar backend e autenticação real.
-  window.openPatientPortal=function(pid){
-    const p=patient(pid), recs=db.records.filter(r=>r.patient===pid&&!r.draft).sort((a,b)=>(b.date||'').localeCompare(a.date||'')), files=db.files.filter(f=>f.patient===pid), contracts=(db.contracts||[]).filter(c=>c.patient===pid), apps=db.appointments.filter(a=>a.patient===pid&&['Realizado','Cancelado com cobrança'].includes(a.status)).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
-    if(!p.portalPin)p.portalPin=String(Math.floor(100000+Math.random()*900000));p.portalEnabled=true;save();
-    modal('Acesso do paciente / familiar',`<div class="formgrid"><div class="wide note"><b>Portal demonstrativo de ${esc(p.name)}</b><br>PIN provisório: <b style="font-size:18px">${esc(p.portalPin)}</b><br><small>Na versão online, o acesso será individual, autenticado e protegido.</small></div></div>
-      <div class="segments" style="margin:18px 0"><button class="selected">Resumo do portal</button></div>
-      <section class="card" style="margin-bottom:14px"><div class="cardhead"><div><h2>Histórico de atendimentos</h2><p>O que foi realizado e registrado para compartilhamento.</p></div><span class="tag">${apps.length}</span></div>${apps.slice(0,12).map(a=>`<div class="record"><h3>${fmt(a.date)} · ${esc(a.service)}</h3><p>${esc(a.status)} · ${esc(professional(a.pro))}</p></div>`).join('')||'<div class="empty">Nenhum atendimento concluído.</div>'}</section>
-      <section class="card" style="margin-bottom:14px"><div class="cardhead"><div><h2>Evoluções liberadas</h2><p>Atualizadas a partir do prontuário.</p></div><span class="tag">${recs.length}</span></div>${recs.slice(0,10).map(r=>`<div class="record"><h3>${fmt(r.date)} · ${esc(r.type)}</h3><p>${esc(r.general||r.conduct||'Registro clínico realizado.')}</p></div>`).join('')||'<div class="empty">Nenhuma evolução concluída.</div>'}</section>
-      <section class="card" style="margin-bottom:14px"><div class="cardhead"><div><h2>Contratos</h2><p>Documentos vinculados ao paciente.</p></div><span class="tag">${contracts.length}</span></div>${contracts.map(c=>`<div class="record"><h3>${esc(c.status||'Rascunho')} · ${esc(c.clientName||p.name)}</h3><p>${c.signedAt?'Assinado em '+new Date(c.signedAt).toLocaleDateString('pt-BR'):'Contrato disponível no sistema'}</p></div>`).join('')||'<div class="empty">Nenhum contrato vinculado.</div>'}</section>
-      <section class="card"><div class="cardhead"><div><h2>Fotos, vídeos e documentos</h2><p>Registros anexados ao prontuário.</p></div><span class="tag">${files.length}</span></div>${files.map(f=>`<div class="record"><a href="${f.data}" download="${esc(f.name)}">${esc(f.name)}</a> <small>· ${fmt(f.date)}</small></div>`).join('')||'<div class="empty">Nenhum arquivo anexado.</div>'}</section>`,null);
-  };
+  window.openPatientPortal=function(){toast('Aguarde o carregamento do acesso do paciente.');};
   const previousDetail=window.detail;
   window.detail=function(){let html=previousDetail();const p=patient(patientId);return `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">${btn('Acesso do paciente / familiar',`openPatientPortal('${p.id}')`,'users','secondary')}</div>`+html};
 
