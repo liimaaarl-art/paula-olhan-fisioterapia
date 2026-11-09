@@ -13,8 +13,7 @@ await mkdir('public');
 for (const file of ['cloud.js','login.html','auth-ui.css','auth-ui.js','auth-account.js','care.css','care.js','bi.css','bi.js','schedule.js','assistant-actions.js','assistant.css','assistant.js','team-contracts.js','collaborator.js','collaborator.css','collaborator-admin.js']) await copyFile(file, 'public/' + file);
 
 
-for(const file of ['paciente.html','paciente-demonstracao.html','patient-demo.js','patient-demo-foto.jpg','patient-demo-video.mp4','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
-await copyFile('fixtures/patient-portal/documento-exemplo.pdf','public/patient-demo-documento.pdf');
+for(const file of ['paciente.html','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
 await copyFile('website/assets/logo-olhan-transparente.png','public/patient-logo.png');
 await mkdir('public/patient-fonts',{recursive:true});
 for(const file of ['BodoniModa.woff','Manrope.woff','Garet-Book.woff'])await copyFile('website/assets/fonts/'+file,'public/patient-fonts/'+file);
