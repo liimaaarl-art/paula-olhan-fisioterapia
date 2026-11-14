@@ -55,7 +55,7 @@
   if(exclusive)throw Error('Aguarde a operação atual.');
   exclusive=true;const before=JSON.stringify(db);status('Confirmando operação no servidor…');
   try{
-   const result=await api('/api/deletions',{revision,kind:plan.kind,ref:plan.ref,scope:plan.scope,plan});
+   const result=await api('/api/workspace',{action:'manage-exclusions',revision,kind:plan.kind,ref:plan.ref,scope:plan.scope,plan});
    if(JSON.stringify(db)!==before){blocked=true;pending=JSON.stringify(db);throw Error('Outras alterações ocorreram durante a operação. Exporte sua cópia e recarregue para conferir a versão do servidor.');}
    revision=result.revision;db=result.data;confirmed=JSON.stringify(db);savedSnapshot=confirmed;
    status(result.portalPending?'Operação salva. O acesso do paciente já segue o cadastro atualizado.':'Salvo no servidor · versão '+revision);

@@ -1,4 +1,5 @@
 import { syncPatientAccounts } from '../lib/patient-store.js';
+import { deletionHandler } from '../lib/deletion-route.js';
 import { protect } from '../lib/auth-guard.js';
 import { db, json } from '../lib/db.js';
 import { workspace, validateState, emptyWorkspace } from '../lib/workspace.js';
@@ -9,6 +10,7 @@ export function workspaceHandler(sqlFactory=db) { return async (req,res)=>{
  if(!['PUT','POST'].includes(req.method))return json(res,405,{error:'Método não permitido.'});
  if(!sameOrigin(req))return json(res,403,{error:'Origem não autorizada.'});
  if(!String(req.headers?.['content-type']||'').startsWith('application/json'))return json(res,415,{error:'Envie JSON.'});
+ if(req.method==='POST'&&req.body?.action==='manage-exclusions')return deletionHandler({sqlFactory})(req,res);
  if(req.method==='POST'){
   if(req.body?.action!=='initialize')return json(res,400,{error:'Operação inválida.'});
   if(!['admin','support'].includes(req.olhanUser.role))return json(res,403,{error:'Acesso não autorizado.'});

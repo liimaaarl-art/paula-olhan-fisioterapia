@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../deletion-core.js';
-import { deletionHandler } from '../api/deletions.js';
+import { deletionHandler } from '../lib/deletion-route.js';
+import { workspaceHandler } from '../api/workspace.js';
 import { validateState } from '../lib/workspace.js';
 import { livePatient } from '../lib/patient-store.js';
 import { identityKey } from '../lib/patient-security.js';
@@ -59,7 +60,7 @@ function server(data=fixture(),{rejectWrite=false,syncError=false}={}){
  let state={revision:7,data},writes=0,syncs=0;
  const sql=async(strings,...values)=>{const q=strings.join('?');if(q.startsWith('SELECT revision,data'))return [structuredClone(state)];if(q.includes('WITH changed AS')){writes++;if(rejectWrite)return [];state={revision:state.revision+1,data:JSON.parse(values[0])};assert.match(q,/WHERE id='olhan' AND revision=/);assert.match(q,/olhan_workspace_history/);return [{revision:state.revision}];}throw Error('Unexpected SQL');};
  const handler=deletionHandler({sqlFactory:()=>sql,makeId:(()=>{let i=0;return()=>`bin-${++i}`})(),sync:async()=>{syncs++;if(syncError)throw Error('sync');}});
- return {handler,state:()=>state,writes:()=>writes,syncs:()=>syncs};
+ return {handler,sql,state:()=>state,writes:()=>writes,syncs:()=>syncs};
 }
 const request=(data,more={})=>({method:'POST',olhanUser:user,headers,body:{revision:7,kind:'appointment',ref:'a',scope:'once',plan:core.prepare(data,'appointment','a')},...more});
 test('API exige sessão administrativa, mesma origem, JSON e revisão, sem consultar dados indevidamente',async()=>{
@@ -72,6 +73,9 @@ test('API verifica revisão e plano antes de salvar, e uma corrida CAS não prod
 test('API salva exclusão e restauração com revisão, histórico e desativação de acesso',async()=>{
  const data=fixture(),s=server(data),res=response(),plan=core.prepare(data,'patient','p1');await s.handler({method:'POST',olhanUser:user,headers,body:{revision:7,kind:'patient',ref:'p1',plan}},res);assert.equal(res.statusCode,200);assert.equal(res.body.revision,8);assert.equal(res.body.data.patients.length,1);assert.equal(s.syncs(),1);
  const bin=res.body.data.recycleBin.find(i=>i.kind==='patient'),restored=response();await s.handler({method:'POST',olhanUser:user,headers,body:{revision:8,kind:'restore',ref:bin.id,plan:core.prepare(res.body.data,'restore',bin.id)}},restored);assert.equal(restored.statusCode,200);assert.equal(restored.body.revision,9);assert.equal(restored.body.data.patients.length,2);assert.equal(s.syncs(),2);
+});
+test('rota existente de workspace recebe a exclusão sem adicionar nova função Vercel',async()=>{
+ const data=fixture(),s=server(data),req=request(data),res=response();req.body.action='manage-exclusions';await workspaceHandler(()=>s.sql)(req,res);assert.equal(res.statusCode,200);assert.equal(res.body.revision,8);assert.ok(!res.body.data.appointments.some(a=>a.id==='a'));assert.equal(s.writes(),1);
 });
 test('falha na sincronização não reabre o portal de paciente excluído',async()=>{
  const data=fixture(),s=server(data,{syncError:true}),res=response();await s.handler({method:'POST',olhanUser:user,headers,body:{revision:7,kind:'patient',ref:'p1',plan:core.prepare(data,'patient','p1')}},res);assert.equal(res.statusCode,200);assert.equal(res.body.portalPending,true);assert.ok(!res.body.data.patients.some(p=>p.id==='p1'));
