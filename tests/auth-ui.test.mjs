@@ -44,3 +44,14 @@ test('build estático não publica HTML clínico, fontes do servidor ou credenci
   for(const forbidden of ['index.html','api','lib','migrations','.env','package.json'])assert.ok(!files.includes(forbidden));
   assert.ok(files.includes('login.html'));assert.ok(files.includes('auth-ui.js'));
 });
+
+test('login mostra a logo oficial e mantém a escolha de 30 dias na confirmação',async()=>{
+ const calls=[];const dom=await app('',async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>url.endsWith('get-session')?null:{twoFactorRedirect:true}}}),w=dom.window;
+ const logo=w.document.querySelector('.brand img');assert.equal(logo.getAttribute('src'),'/patient-logo.png');assert.match(logo.alt,/Olhan/);
+ let form=w.document.querySelector('form');form.elements.email.value='owner@example.test';form.elements.password.value='Senha-de-teste-123';form.elements.remember.checked=true;
+ form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+ form=w.document.querySelector('form');form.elements.code.value='12345678';
+ form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+ const request=calls.find(c=>c.url.endsWith('verify-otp'));assert.equal(JSON.parse(request.options.body).rememberMe,true);assert.equal(JSON.parse(request.options.body).trustDevice,false);
+ assert.equal(w.localStorage.length,0);assert.equal(w.sessionStorage.length,0);w.close();
+});
