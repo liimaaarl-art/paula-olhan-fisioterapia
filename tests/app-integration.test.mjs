@@ -97,3 +97,47 @@ test('importação antiga não ressuscita paciente nem agendamento já excluído
  const server=core.apply(legacy,core.prepare(legacy,'patient','p1'),{makeId:(()=>{let n=0;return()=>`excluded-${++n}`})(),now:new Date().toISOString(),actor:'admin'});seed.window.close();let written;
  const dom=await app({stored:legacy,setup(w){w.__OLHAN_CLOUD__={revision:7,data:server,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace')written=JSON.parse(options.body);return {ok:true,json:async()=>url==='/api/workspace'?{revision:8}:{configured:true}};}}),w=dom.window;w.confirm=()=>true;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.document.getElementById('cloud-import-legacy').click();await tick();await tick();assert.ok(!written.data.patients.some(p=>p.id==='p1'));assert.ok(!written.data.appointments.some(a=>a.id==='c1'));assert.equal(written.data.recycleBin.length,2);w.close();
 });
+
+async function financeScheduleApp(options={}){
+ const originalSetup=options.setup;
+ return app({...options,setup(w){const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-11-14T15:00:00Z']))}static now(){return NativeDate.parse('2026-11-14T15:00:00Z')}};originalSetup?.(w);}});
+}
+function recurringForm(w,{frequency='fortnight',kind='count',count=4,start='2026-12-07',until='2027-01-04',day='1'}={}){
+ w.appointmentForm(undefined,{patient:'p2',pro:'pB',date:start,time:'10:00'});
+ const f=w.document.getElementById('form');f.elements.repeatKind.value=kind;f.elements.weeklyFrequency.value=frequency;f.elements.repeatCount.value=String(count);f.elements.repeatUntil.value=until;f.elements.slot1Day.value=day;f.elements.slot1Time.value='10:00';f.elements.slot2Day.value='3';f.elements.slot2Time.value='10:00';w.toggleScheduleFields();return f;
+}
+const submitForm=(w,f)=>f.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+test('agendamento quinzenal mantém o dia da semana e intervalo de 14 dias na virada do ano',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window,f=recurringForm(w);
+ assert.match(f.textContent,/Quinzenal · a cada 2 semanas/);assert.equal(f.querySelectorAll('[data-slot-row]:not(.v5-slot-hidden)').length,1);submitForm(w,f);
+ const created=w.eval('db.appointments.filter(a=>a.recurrenceIntervalWeeks===2)');assert.deepEqual(Array.from(created,a=>a.date),['2026-12-07','2026-12-21','2027-01-04','2027-01-18']);assert.equal(new Set(created.map(a=>a.seriesId)).size,1);assert.equal(w.eval("patient('p2').frequency"),'Quinzenal');w.close();
+});
+test('quinzenal até uma data inclui o último dia e começa no próximo dia da semana escolhido',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,recurringForm(w,{kind:'until',start:'2026-12-01',until:'2027-01-04'}));assert.deepEqual(Array.from(w.eval('db.appointments.filter(a=>a.recurrenceIntervalWeeks===2)'),a=>a.date),['2026-12-07','2026-12-21','2027-01-04']);w.close();
+});
+test('quinzenal gera a quantidade inteira de 300 sessões sem truncar o período',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,recurringForm(w,{count:300}));const created=w.eval('db.appointments.filter(a=>a.recurrenceIntervalWeeks===2)');assert.equal(created.length,300);assert.equal((Date.parse(created.at(-1).date)-Date.parse(created[0].date))/86400000,299*14);w.close();
+});
+test('frequência semanal continua gerando os dois dias por semana',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,recurringForm(w,{frequency:'2',count:6}));assert.deepEqual(Array.from(w.eval('db.appointments.filter(a=>a.recurrenceIntervalWeeks===1)'),a=>a.date),['2026-12-07','2026-12-09','2026-12-14','2026-12-16','2026-12-21','2026-12-23']);w.close();
+});
+test('conflito em uma sessão quinzenal bloqueia a série inteira',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;w.eval("db.appointments.push({id:'conflict-biweekly',patient:'p1',pro:'pB',date:'2026-12-21',time:'10:30',duration:60,status:'Agendado'})");const before=w.eval('JSON.stringify(db.appointments)');submitForm(w,recurringForm(w));assert.equal(w.eval('JSON.stringify(db.appointments)'),before);assert.match(w.document.getElementById('toast').textContent,/Conflito/);w.close();
+});
+test('reagendar e excluir próximas sessões mantém a recorrência quinzenal',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,recurringForm(w));const first=w.eval('db.appointments.find(a=>a.recurrenceIntervalWeeks===2).id');w.scheduleRequest(first,{time:'11:30'});w.scheduleConfirm('future');const series=w.eval('db.appointments.filter(a=>a.recurrenceIntervalWeeks===2)');assert.ok(series.every(a=>a.time==='11:30'));assert.deepEqual(Array.from(series,a=>a.date),['2026-12-07','2026-12-21','2027-01-04','2027-01-18']);const plan=w.OlhanDeletionCore.prepare(w.eval('db'),'appointment',series[1].id,'future');assert.equal(plan.count,3);w.close();
+});
+test('financeiro abre o mês completo e sinaliza gastos fora do filtro sem alterar lançamentos',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;w.eval("db.cashEntries=[{id:'fixed-1',date:'2026-11-20',type:'saida',category:'Gasto fixo',description:'Gasto fictício A',amount:1},{id:'fixed-2',date:'2026-11-20',type:'saida',category:'Gasto fixo',description:'Gasto fictício B',amount:250}]");const before=w.eval('JSON.stringify(db.cashEntries)');assert.equal(w.eval('financeTo'),'2026-11-30');w.setFinanceTab('Caixa');w.go('finance');assert.match(w.document.getElementById('app').textContent,/Gasto fictício A/);assert.match(w.document.getElementById('app').textContent,/Gasto fictício B/);w.financeSetPeriod('today');assert.match(w.document.getElementById('app').textContent,/2 lançamento\(s\) fora do período/);assert.ok(!w.document.querySelector('.cash-table tbody').textContent.includes('Gasto fictício A'));w.financeSetPeriod('all');assert.match(w.document.querySelector('.cash-table tbody').textContent,/Gasto fictício A/);assert.equal(w.eval('JSON.stringify(db.cashEntries)'),before);w.close();
+});
+function fillCash(w,{date='2026-12-20',description='Despesa fictícia'}={}){w.cashEntryForm();const f=w.document.getElementById('form');f.elements.type.value='saida';f.elements.category.value='Gasto fixo';f.elements.date.value=date;f.elements.amount.value='250.50';f.elements.description.value=description;return f;}
+test('salvar gasto abre o Caixa e amplia o período para mostrar o novo lançamento',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;w.eval("financeFrom='2026-01-01';financeTo='2026-01-31'");submitForm(w,fillCash(w));await tick();assert.equal(w.eval('view'),'finance');assert.equal(w.document.querySelector('.finance-tabs button.active').textContent,'Caixa');assert.equal(w.eval('financeTo'),'2026-12-20');assert.match(w.document.querySelector('.cash-table tbody').textContent,/Despesa fictícia/);assert.equal(w.eval('db.cashEntries[0].amount'),250.5);w.close();
+});
+test('Caixa aguarda confirmação do servidor e clique duplicado não duplica a despesa',async()=>{
+ let reply,started;const sent=new Promise(r=>started=r),requests=[];
+ const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace'){requests.push(JSON.parse(options.body));started();return new Promise(resolve=>reply=resolve);}return {ok:true,json:async()=>({configured:true})};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));const f=fillCash(w);submitForm(w,f);submitForm(w,f);await sent;assert.equal(requests.length,1);assert.match(f.querySelector('#cash-save-status').textContent,/Salvando/);assert.equal(f.querySelector('[type="submit"]').disabled,true);reply({ok:true,json:async()=>({revision:8})});await w.OlhanCloud.flush();await tick();assert.equal(w.eval('db.cashEntries.length'),1);assert.equal(w.document.querySelector('.finance-tabs button.active').textContent,'Caixa');assert.match(w.document.querySelector('.cash-table tbody').textContent,/Despesa fictícia/);assert.equal(w.OlhanCloud.status().revision,8);w.close();
+});
+test('falha no salvamento do gasto mantém formulário e não confirma nem duplica o lançamento',async()=>{
+ let posts=0;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url)=>{if(url==='/api/workspace')posts++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha simulada de gravação'}:{configured:true}};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));const f=fillCash(w);submitForm(w,f);await tick();await tick();assert.equal(w.document.getElementById('modal').open,true);assert.match(f.querySelector('#cash-save-status').textContent,/sem confirmação/);assert.equal(w.eval('db.cashEntries.length'),1);submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries.length'),1);assert.equal(posts,1);assert.equal(w.OlhanCloud.status().blocked,true);w.close();
+});
