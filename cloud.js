@@ -2,7 +2,7 @@
 (() => {
  'use strict';
  const initial=window.__OLHAN_CLOUD__;if(!initial)return;
- let revision=initial.revision,ready=revision>0,pending=null,running=null,blocked=false,confirmed=JSON.stringify(db);
+ let revision=initial.revision,ready=revision>0,pending=null,running=null,blocked=false,exclusive=false,confirmed=JSON.stringify(db);
  const bar=document.createElement('div');bar.id='cloud-status';bar.setAttribute('role','status');
  bar.style.cssText='position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:10000;background:#173e39;color:white;padding:12px 18px;border-radius:12px;max-width:95vw;font:14px sans-serif;box-shadow:0 4px 24px #0004';document.body.append(bar);
  const label=document.createElement('span');bar.append(label);
@@ -45,13 +45,25 @@
   }}catch(e){blocked=true;pending=JSON.stringify(db);status(e.message+' Exporte sua cópia antes de sair.');throw e;}
  }
  function persist(){
-  if(!ready||blocked){toast('Salvamento bloqueado. Conclua a importação ou exporte suas alterações pendentes.');return false;}
+  if(!ready||blocked||exclusive){toast('Salvamento bloqueado. Aguarde a operação atual ou exporte suas alterações pendentes.');return false;}
   pending=JSON.stringify(db);if(!running){running=drain().catch(()=>{}).finally(()=>{running=null;});}return true;
  }
  window.OlhanCloud={save:persist,async flush(){if(!ready||blocked)throw Error('Dados ainda não disponíveis no servidor.');if(running)await running;if(blocked)throw Error('Há alterações sem confirmação do servidor.');},status:()=>({revision,ready,pending:!!running,blocked})};
+ window.OlhanCloud.deletion=async function(plan){
+  if(exclusive)throw Error('Aguarde a operação atual.');
+  await window.OlhanCloud.flush();
+  if(exclusive)throw Error('Aguarde a operação atual.');
+  exclusive=true;const before=JSON.stringify(db);status('Confirmando operação no servidor…');
+  try{
+   const result=await api('/api/workspace',{action:'manage-exclusions',revision,kind:plan.kind,ref:plan.ref,scope:plan.scope,plan});
+   if(JSON.stringify(db)!==before){blocked=true;pending=JSON.stringify(db);throw Error('Outras alterações ocorreram durante a operação. Exporte sua cópia e recarregue para conferir a versão do servidor.');}
+   revision=result.revision;db=result.data;confirmed=JSON.stringify(db);savedSnapshot=confirmed;
+   status(result.portalPending?'Operação salva. O acesso do paciente já segue o cadastro atualizado.':'Salvo no servidor · versão '+revision);
+  }catch(e){status(e.message);throw e;}finally{exclusive=false;}
+ };
  save=persist;
  const oldToast=toast;toast=function(message){if(running&&/salv|registrad|atualizad|criad|anexad|excluí|removid/i.test(message))return oldToast('Alteração em processamento. Confira a confirmação de salvamento no servidor.');return oldToast(message);};
- window.addEventListener('beforeunload',e=>{if(running||pending!==null){e.preventDefault();e.returnValue='';}});
+ window.addEventListener('beforeunload',e=>{if(running||pending!==null||exclusive){e.preventDefault();e.returnValue='';}});
  uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>52428800)return toast('Limite de 50 MB por arquivo.');const pid=patientId,folder=typeof patientFileFolderFilter==='string'&&patientFileFolderFilter!=='Todos'?patientFileFolderFilter:'Geral';
   try{await OlhanCloud.flush();status('Enviando arquivo ao servidor…');const item=await sendFile(file,pid,file.name,file.type);db.files.push({...item,cloudId:item.id,patient:pid,folder,date:today});persist();await OlhanCloud.flush();render();}
   catch(e){status(e.message||'Não foi possível salvar o arquivo.');}
@@ -79,7 +91,14 @@
    button.disabled=true;
    const progress=document.createElement('dialog');progress.style.cssText='max-width:90vw;border:0;border-radius:12px;padding:28px';progress.textContent='Importando a cópia antiga. Aguarde a confirmação do servidor…';progress.addEventListener('cancel',e=>e.preventDefault());document.body.append(progress);progress.showModal();
    try{await OlhanCloud.flush();const local=JSON.parse(localStorage.getItem('olhan-v1'));if(!local||!Array.isArray(local.patients)||!Array.isArray(local.files))throw Error('A cópia local não é válida.');
-    const imported=await migrateFiles(local),data=mergeLegacy(JSON.parse(JSON.stringify(db)),imported);
+    const imported=await migrateFiles(local);
+    // Importing an old browser copy must not silently restore excluded rows.
+    const excludedPatients=new Set((db.recycleBin||[]).filter(i=>i.kind==='patient').map(i=>i.patient.id));
+    const excludedAppointments=new Set((db.recycleBin||[]).filter(i=>i.kind==='appointments').flatMap(i=>i.items.map(a=>a.id)));
+    imported.patients=imported.patients.filter(p=>!excludedPatients.has(p.id));
+    imported.appointments=(imported.appointments||[]).filter(a=>!excludedAppointments.has(a.id)&&!excludedPatients.has(a.patient));
+    imported.recycleBin=[];
+    const data=mergeLegacy(JSON.parse(JSON.stringify(db)),imported);
     const result=await api('/api/workspace',{revision,data},'PUT');revision=result.revision;db=data;confirmed=JSON.stringify(data);savedSnapshot=confirmed;render();status('Cópia antiga adicionada. Registros já existentes foram preservados no servidor.');button.remove();
    }catch(e){status(e.message+' A cópia antiga continua intacta.');button.disabled=false;}finally{progress.close();progress.remove();}
   };

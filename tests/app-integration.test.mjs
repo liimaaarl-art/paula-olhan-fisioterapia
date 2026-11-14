@@ -67,3 +67,33 @@ test('administradora pode importar cópia antiga depois de entrar sem bloquear o
  const dom=await app({stored:legacy,setup(w){w.__OLHAN_CLOUD__={revision:1,data:server,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace')written=JSON.parse(options.body);return {ok:true,json:async()=>url==='/api/workspace'?{revision:2}:{configured:true,connected:true}};}});
  const w=dom.window,before=w.localStorage.getItem('olhan-v1');w.confirm=()=>true;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));assert.ok(w.document.getElementById('cloud-import-legacy'));w.go('patients');w.document.getElementById('cloud-import-legacy').click();await tick();await tick();assert.ok(written.data.patients.some(p=>p.id==='server-patient'));assert.ok(written.data.patients.some(p=>p.id===legacy.patients[0].id));assert.equal(w.localStorage.getItem('olhan-v1'),before);assert.equal(w.OlhanCloud.status().revision,2);w.close();
 });
+
+test('exclusão de agenda permite revisar uma sessão ou toda a recorrência e cancelar sem alteração',async()=>{
+ const dom=await app(),w=dom.window;
+ w.eval("db.appointments.find(a=>a.id==='c1').seriesId='delete-series';db.appointments.push({...db.appointments.find(a=>a.id==='c1'),id:'future-delete',date:add(today,9),time:'11:00'});save()");
+ const before=w.localStorage.getItem('olhan-v1');w.appointmentForm('c1');assert.match(w.document.getElementById('form').textContent,/Excluir agendamento/);w.olhanDeleteRequest('appointment','c1');
+ assert.equal(w.localStorage.getItem('olhan-v1'),before);const radio=w.document.querySelector('[name="deleteScope"][value="future"]');radio.checked=true;radio.dispatchEvent(new w.Event('change'));
+ assert.match(w.document.getElementById('deletion-preview').textContent,/2 agendamento/);w.closeModal();assert.equal(w.localStorage.getItem('olhan-v1'),before);
+ w.olhanDeleteRequest('appointment','c1');w.document.getElementById('deletion-confirm').checked=true;await w.olhanDeletionConfirm();const data=JSON.parse(w.localStorage.getItem('olhan-v1'));assert.ok(!data.appointments.some(a=>a.id==='c1'));assert.ok(data.appointments.some(a=>a.id==='future-delete'));w.olhanOpenTrash();assert.match(w.document.getElementById('form').textContent,/Restaurar/);dom.window.close();
+});
+test('exclusão de paciente preserva nome no financeiro, registros e anexos e permite restaurar cadastro',async()=>{
+ const dom=await app(),w=dom.window;w.patientForm('p1');assert.match(w.document.getElementById('form').textContent,/Excluir paciente/);const records=w.eval('JSON.stringify(db.records)');
+ w.olhanDeleteRequest('patient','p1');w.document.getElementById('deletion-confirm').checked=true;await w.olhanDeletionConfirm();assert.equal(w.eval("db.patients.some(p=>p.id==='p1')"),false);assert.equal(w.eval('JSON.stringify(db.records)'),records);assert.equal(w.eval("patient('p1').name"),'Helena Duarte');
+ w.go('patients');assert.ok(!w.document.getElementById('patientcards').textContent.includes('Helena Duarte'));assert.match(w.document.getElementById('app').textContent,/Lixeira/);
+ w.olhanDeletedHistory('p1');assert.match(w.document.getElementById('form').textContent,/Registro fictício/);const ref=w.eval("db.recycleBin.find(x=>x.kind==='patient').id");w.olhanRestoreRequest(ref);w.document.getElementById('deletion-confirm').checked=true;await w.olhanDeletionConfirm();assert.equal(w.eval("db.patients.some(p=>p.id==='p1')"),true);dom.window.close();
+});
+test('falha de servidor na exclusão mantém os dados e a revisão aberta, sem sucesso falso',async()=>{
+ const dom=await app({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url,options)=>({ok:JSON.parse(options?.body||'{}').action!=='manage-exclusions',json:async()=>JSON.parse(options?.body||'{}').action==='manage-exclusions'?{error:'Falha simulada de confirmação'}:{configured:true}})}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
+ const before=w.eval('JSON.stringify(db)');w.olhanDeleteRequest('appointment','c1');w.document.getElementById('deletion-confirm').checked=true;await w.olhanDeletionConfirm();assert.equal(w.eval('JSON.stringify(db)'),before);assert.match(w.document.getElementById('deletion-error').textContent,/Falha simulada/);assert.equal(w.document.getElementById('modal').open,true);assert.equal(w.document.querySelector('#form button[type="submit"]').disabled,false);w.close();
+});
+test('exclusão online só altera a interface depois da confirmação do servidor',async()=>{
+ let reply,started;const sent=new Promise(r=>started=r);
+ const dom=await app({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace'&&JSON.parse(options?.body||'{}').action==='manage-exclusions'){started();return new Promise(r=>reply=r);}return {ok:true,json:async()=>({configured:true})};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
+ const before=w.eval('JSON.stringify(db)'),plan=w.OlhanDeletionCore.prepare(JSON.parse(before),'appointment','c1'),next=w.OlhanDeletionCore.apply(JSON.parse(before),plan,{makeId:()=> 'server-trash',now:new Date().toISOString(),actor:'admin'});
+ w.olhanDeleteRequest('appointment','c1');w.document.getElementById('deletion-confirm').checked=true;const pending=w.olhanDeletionConfirm();await sent;assert.equal(w.eval('JSON.stringify(db)'),before);assert.equal(w.document.querySelector('#form button[type="submit"]').disabled,true);reply({ok:true,json:async()=>({revision:8,data:next})});await pending;assert.equal(w.eval("db.appointments.some(a=>a.id==='c1')"),false);assert.equal(w.OlhanCloud.status().revision,8);assert.equal(w.document.getElementById('modal').open,false);w.close();
+});
+test('importação antiga não ressuscita paciente nem agendamento já excluído',async()=>{
+ const seed=await app(),legacy=JSON.parse(seed.window.localStorage.getItem('olhan-v1')),core=seed.window.OlhanDeletionCore;
+ const server=core.apply(legacy,core.prepare(legacy,'patient','p1'),{makeId:(()=>{let n=0;return()=>`excluded-${++n}`})(),now:new Date().toISOString(),actor:'admin'});seed.window.close();let written;
+ const dom=await app({stored:legacy,setup(w){w.__OLHAN_CLOUD__={revision:7,data:server,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace')written=JSON.parse(options.body);return {ok:true,json:async()=>url==='/api/workspace'?{revision:8}:{configured:true}};}}),w=dom.window;w.confirm=()=>true;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.document.getElementById('cloud-import-legacy').click();await tick();await tick();assert.ok(!written.data.patients.some(p=>p.id==='p1'));assert.ok(!written.data.appointments.some(a=>a.id==='c1'));assert.equal(written.data.recycleBin.length,2);w.close();
+});
