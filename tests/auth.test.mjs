@@ -2,6 +2,7 @@ import { hashPassword } from 'better-auth/crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
+import { CookieJar } from 'jsdom';
 import { getMigrations } from 'better-auth/db/migration';
 import { createAuth, adminSession, REMEMBER_SESSION_SECONDS, SHORT_SESSION_SECONDS } from '../lib/auth.js';
 import { authRequest } from '../lib/auth-route.js';
@@ -10,15 +11,15 @@ import { smtpConfig } from '../lib/auth-mail.js';
 
 const baseURL = 'http://localhost:3000', adminEmail = 'owner@example.test';
 const password = 'Somente-teste-123!';
-async function fixture({ rateLimit = false, failMail = false } = {}) {
+async function fixture({ rateLimit = false, failMail = false, baseURL:originURL=baseURL } = {}) {
   const database = new DatabaseSync(':memory:'), mails = [], jar = new Map();
-  const auth = createAuth({ database, secret: 'a-random-test-secret-that-is-over-32-characters', baseURL, adminEmail, rateLimit,
+  const auth = createAuth({ database, secret: 'a-random-test-secret-that-is-over-32-characters', baseURL:originURL, adminEmail, rateLimit,
     sendMail: async mail => { if (failMail) throw Error('private-smtp-error'); mails.push(mail); } });
   await (await getMigrations(auth.options)).runMigrations();
   const cookie = () => [...jar].map(([k,v]) => k + '=' + v).join('; ');
-  async function request(path, body, { origin = baseURL, cookies = cookie() } = {}) {
+  async function request(path, body, { origin = originURL, cookies = cookie() } = {}) {
     const headers = { origin, cookie: cookies, 'content-type':'application/json', 'x-forwarded-for':'127.0.0.1' };
-    const response = await authRequest(new Request(baseURL + '/api/auth/' + path, { method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body) }), auth, { baseURL, adminEmail });
+    const response = await authRequest(new Request(originURL + '/api/auth/' + path, { method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body) }), auth, { baseURL:originURL, adminEmail });
     for (const c of response.headers.getSetCookie()) { const pair=c.split(';')[0], at=pair.indexOf('='); const key=pair.slice(0,at), value=pair.slice(at+1); if(value)jar.set(key,value);else jar.delete(key); }
     const data = await response.json();
     return { status: response.status, data, headers: response.headers };
@@ -207,4 +208,39 @@ test('senha inicial de suporte com oito caracteres funciona sem reduzir a regra 
  const pass='12345678';const hash=await hashPassword(pass);const now=new Date().toISOString();
  f.database.prepare('INSERT INTO olhan_auth_account(id,accountId,providerId,userId,password,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?)').run('test-initial-account',user.id,'credential',user.id,hash,now,now);
  const login=await f.request('sign-in/email',{email:adminEmail,password:pass});assert.equal(login.data.twoFactorRedirect,true);assert.equal((await f.verify()).status,200);
+});
+
+test('escolha explícita no passo de confirmação supera preferência curta antiga sem dispensar OTP',async()=>{
+ const f=await fixture();await f.setPassword();await f.signin(false);
+ const wrong=f.mails.at(-1).code==='00000000'?'11111111':'00000000';
+ assert.equal((await f.request('two-factor/verify-otp',{code:wrong,rememberMe:true})).status,401);
+ assert.equal((await f.request('get-session')).data,null);
+ const result=await f.request('two-factor/verify-otp',{code:f.mails.at(-1).code,rememberMe:true,trustDevice:false});
+ assert.equal(result.status,200);
+ assert.match(result.headers.getSetCookie().find(c=>c.startsWith('olhan.session_token=')),/Max-Age=2592000/i);
+ const row=f.database.prepare('select * from olhan_auth_session').get();
+ assert.ok(Math.abs(new Date(row.expiresAt)-Date.now()-REMEMBER_SESSION_SECONDS*1000)<5000);
+});
+
+test('HTTPS: cookie persistente sobrevive ao fechamento, uma hora e 29 dias; vence após 30 dias',async t=>{
+ const origin='https://clinic.example',f=await fixture({baseURL:origin});
+ await f.setPassword();let jar=new CookieJar();
+ async function call(path,body){
+  const r=await f.request(path,body,{cookies:jar.getCookieStringSync(origin)});
+  for(const cookie of r.headers.getSetCookie())jar.setCookieSync(cookie,origin);
+  return r;
+ }
+ await call('sign-in/email',{email:adminEmail,password,rememberMe:true});
+ const verified=await call('two-factor/verify-otp',{code:f.mails.at(-1).code,trustDevice:false,rememberMe:true});
+ assert.equal(verified.status,200);
+ const token=verified.headers.getSetCookie().find(c=>c.startsWith('__Secure-olhan.session_token='));
+ assert.match(token,/Secure/i);assert.match(token,/HttpOnly/i);assert.match(token,/Max-Age=2592000/i);
+ const serialized=jar.serializeSync();serialized.cookies=serialized.cookies.filter(c=>c.maxAge!==undefined||(c.expires&&c.expires!=='Infinity'));
+ jar=CookieJar.deserializeSync(serialized);
+ const sent=f.mails.length,now=Date.now();t.mock.timers.enable({apis:['Date'],now:now+60*60*1000});
+ assert.equal((await call('get-session')).data.user.email,adminEmail);
+ t.mock.timers.setTime(now+29*24*60*60*1000);
+ assert.equal((await call('get-session')).data.user.email,adminEmail);assert.equal(f.mails.length,sent);
+ t.mock.timers.setTime(now+31*24*60*60*1000);
+ assert.equal((await call('get-session')).data,null);
 });

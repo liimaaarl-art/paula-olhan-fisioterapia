@@ -1,6 +1,12 @@
 (() => {
   'use strict';
   const content = document.getElementById('access-content'), message = document.getElementById('access-message');
+  const canonicalOrigin = document.querySelector('meta[name="olhan-auth-origin"]')?.content;
+  if (canonicalOrigin && new URL(canonicalOrigin).origin !== location.origin) {
+    location.replace(new URL('/login.html' + location.search + location.hash, canonicalOrigin).href);
+    return;
+  }
+  let rememberLogin;
   const initial = new URLSearchParams(location.hash.slice(1));
   const resetToken = initial.get('reset'), confirmCode = initial.get('confirm');
   const account = location.hash === '#account';
@@ -34,9 +40,10 @@
     });
   }
   function login() {
-    form('<h1>Acessar o sistema</h1><p>Use seu e-mail e senha. Depois, confirme o acesso pelo link enviado ao seu e-mail.</p><form id="login-form" method="post" action="/api/auth/sign-in/email">' + input('E-mail cadastrado', 'email', 'email', 'username') + input('Senha', 'password', 'password', 'current-password') + '<label class="remember-choice"><input name="remember" type="checkbox"><span>Manter conectado neste navegador por 30 dias</span></label><p class="note">Marque em um aparelho de uso pessoal. Você entrará direto enquanto a sessão estiver válida. Para salvar a senha, use a opção oferecida pelo navegador.</p><button type="submit">Entrar</button></form><a class="text-link" href="#" id="forgot">Primeiro acesso ou esqueci minha senha</a>', async data => {
+    form('<h1>Acessar o sistema</h1><p>Use seu e-mail e senha. Depois, confirme o acesso pelo link enviado ao seu e-mail.</p><form id="login-form" method="post" action="/api/auth/sign-in/email">' + input('E-mail cadastrado', 'email', 'email', 'username') + input('Senha', 'password', 'password', 'current-password') + '<label class="remember-choice"><input name="remember" type="checkbox"><span>Manter conectado neste navegador por 30 dias</span></label><p class="note">Marque em um aparelho de uso pessoal. Você entrará direto enquanto a sessão estiver válida. Para salvar a senha, use a opção oferecida pelo navegador.</p><p class="browser-note">No celular, acesse sempre pelo mesmo Safari ou Chrome, fora do navegador interno do WhatsApp ou do e-mail.</p><button type="submit">Entrar</button></form><a class="text-link" href="#" id="forgot">Primeiro acesso ou esqueci minha senha</a>', async data => {
       const result = await api('sign-in/email', { email: data.get('email').trim(), password: data.get('password'), rememberMe: data.get('remember') === 'on' });
       if (result?.twoFactorRedirect !== true) throw new Error('Não foi possível iniciar a confirmação do acesso. Tente entrar novamente.');
+      rememberLogin = data.get('remember') === 'on';
       challenge();
     });
     document.getElementById('forgot').onclick = e => { e.preventDefault(); resetRequest(); };
@@ -48,7 +55,7 @@
     });
   }
   async function confirm(code) {
-    await api('two-factor/verify-otp', { code: code.trim(), trustDevice: false });
+    await api('two-factor/verify-otp', { code: code.trim(), trustDevice: false, ...(rememberLogin === true ? {rememberMe:true} : {}) });
     location.replace('/');
   }
   function challenge(code = '') {

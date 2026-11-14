@@ -1,4 +1,4 @@
-import { mkdir, copyFile, rm } from 'node:fs/promises';
+import { mkdir, copyFile, rm, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 if (process.env.OLHAN_AUTH_SELF_TEST === '1' && process.env.VERCEL_ENV === 'preview') {
   const suite=spawnSync('npm',['test'],{stdio:'inherit',env:{...process.env,OLHAN_AUTH_SELF_TEST:'0'}});
@@ -11,13 +11,19 @@ if (process.env.OLHAN_AUTH_SELF_TEST === '1' && process.env.VERCEL_ENV === 'prev
 await rm('public', { recursive: true, force: true });
 await mkdir('public');
 for (const file of ['cloud.js','login.html','auth-ui.css','auth-ui.js','auth-account.js','care.css','care.js','bi.css','bi.js','schedule.js','assistant-actions.js','assistant.css','assistant.js','team-contracts.js','collaborator.js','collaborator.css','collaborator-admin.js']) await copyFile(file, 'public/' + file);
+if (process.env.VERCEL_ENV === 'production' && process.env.BETTER_AUTH_URL) {
+ const origin=new URL(process.env.BETTER_AUTH_URL);
+ if(origin.protocol!=='https:')throw Error('Production authentication requires HTTPS');
+ const html=await readFile('public/login.html','utf8');
+ await writeFile('public/login.html',html.replace('<meta name="olhan-auth-origin" content="">',`<meta name="olhan-auth-origin" content="${origin.origin}">`));
+}
 
 
 for(const file of ['paciente.html','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
 await copyFile('website/assets/logo-olhan-transparente.png','public/patient-logo.png');
 await mkdir('public/patient-fonts',{recursive:true});
 for(const file of ['BodoniModa.woff','Manrope.woff','Garet-Book.woff'])await copyFile('website/assets/fonts/'+file,'public/patient-fonts/'+file);
-const portalChecks=spawnSync(process.execPath,['--test','tests/patient-demo.test.mjs','tests/patient-navigation.test.mjs','tests/patient-profile.test.mjs','tests/production-readiness.test.mjs'],{stdio:'inherit'});
+const portalChecks=spawnSync(process.execPath,['--test','tests/patient-demo.test.mjs','tests/patient-navigation.test.mjs','tests/patient-profile.test.mjs','tests/production-readiness.test.mjs','tests/auth.test.mjs','tests/auth-http.test.mjs','tests/auth-ui.test.mjs'],{stdio:'inherit'});
 if(portalChecks.status!==0)throw Error('Patient portal navigation checks failed');
 if(process.env.OLHAN_PATIENT_TEST==='1' && process.env.VERCEL_ENV==='preview') await import('./verify-patient-portal.mjs');
 if (process.env.VERCEL_ENV === 'production') {
