@@ -141,3 +141,59 @@ test('Caixa aguarda confirmação do servidor e clique duplicado não duplica a 
 test('falha no salvamento do gasto mantém formulário e não confirma nem duplica o lançamento',async()=>{
  let posts=0;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url)=>{if(url==='/api/workspace')posts++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha simulada de gravação'}:{configured:true}};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));const f=fillCash(w);submitForm(w,f);await tick();await tick();assert.equal(w.document.getElementById('modal').open,true);assert.match(f.querySelector('#cash-save-status').textContent,/sem confirmação/);assert.equal(w.eval('db.cashEntries.length'),1);submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries.length'),1);assert.equal(posts,1);assert.equal(w.OlhanCloud.status().blocked,true);w.close();
 });
+
+test('agenda diferencia realizado, evolução e avaliação em lista, calendário e grade, sem concluir rascunhos',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;
+ w.eval(`db.appointments=['done','evolved','assessed','draft','scheduled','cancelled'].map((id,i)=>({id,patient:'p1',pro:'pA',date:today,time:String(8+i).padStart(2,'0')+':00',duration:60,price:100,status:id==='done'?'Realizado':id==='cancelled'?'Cancelado sem cobrança':'Agendado',service:'Fisioterapia domiciliar'}));
+ db.records=[{id:'r1',appointment:'evolved',patient:'p1',type:'Evolução'}, {id:'r2',appointment:'assessed',patient:'p1',type:'Avaliação',draft:false}, {id:'r3',appointment:'draft',patient:'p1',type:'Avaliação',draft:true}, {id:'r4',appointment:'cancelled',patient:'p1',type:'Evolução'}, {id:'r5',appointment:'scheduled',patient:'p2',type:'Evolução'}];`);
+ const before=w.eval('JSON.stringify(db)');w.go('agenda');
+ for(const layout of ['list','calendar','time']){
+  w.setAgendaLayout(layout);
+  for(const id of ['done','evolved','assessed'])assert.ok(w.document.querySelector(`[data-appointment-id="${id}"] .appointment-check`),layout+' '+id);
+  for(const id of ['draft','scheduled','cancelled'])assert.equal(w.document.querySelector(`[data-appointment-id="${id}"] .appointment-check`),null,layout+' '+id);
+  assert.match(w.document.querySelector('[data-appointment-id="evolved"]').textContent,/Evolução registrada/);
+  assert.match(w.document.querySelector('[data-appointment-id="assessed"]').textContent,/Avaliação registrada/);
+ }
+ assert.equal(w.eval('JSON.stringify(db)'),before);w.close();
+});
+test('salvar evolução vinculada passa a mostrar o check na agenda',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;
+ w.eval("db.appointments=[{id:'session-note',patient:'p1',pro:'pA',date:today,time:'10:00',duration:60,price:100,status:'Agendado',service:'Fisioterapia domiciliar'}];db.records=[]");
+ w.go('agenda');assert.equal(w.document.querySelector('[data-appointment-id="session-note"] .appointment-check'),null);
+ w.recordForm('p1','session-note');const form=w.document.getElementById('form');form.elements.general.value='Registro clínico fictício para verificação.';submitForm(w,form);await tick();w.go('agenda');
+ assert.match(w.document.querySelector('[data-appointment-id="session-note"]').textContent,/Evolução registrada/);assert.ok(w.document.querySelector('[data-appointment-id="session-note"] .appointment-check'));w.close();
+});
+function repeatCash(w,f,until){f.elements.category.dispatchEvent(new w.Event('change'));f.elements.repeatMonthly.checked=true;f.elements.repeatMonthly.dispatchEvent(new w.Event('change'));f.elements.repeatUntil.value=until;f.elements.repeatUntil.dispatchEvent(new w.Event('change'));return f;}
+test('gasto fixo repete até o mês final inclusive e usa o último dia de fevereiro sem perder o dia 31 em março',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;const f=repeatCash(w,fillCash(w,{date:'2027-01-31'}),'2027-03');
+ assert.equal(f.querySelector('#cash-recurring').hidden,false);assert.match(f.querySelector('#cash-repeat-preview').textContent,/3 lançamento/);submitForm(w,f);await tick();
+ const rows=Array.from(w.eval('db.cashEntries'));
+ assert.deepEqual(rows.map(e=>e.date),['2027-01-31','2027-02-28','2027-03-31']);assert.ok(rows.every(e=>e.amount===250.5));assert.equal(new Set(rows.map(e=>e.id)).size,3);assert.equal(new Set(rows.map(e=>e.recurrenceId)).size,1);
+ w.eval("financeFrom='2027-02-01';financeTo='2027-02-28'");w.render();assert.match(w.document.querySelector('.cash-table tbody').textContent,/28 de fev/);assert.equal(w.document.querySelectorAll('.cash-table tbody tr').length,1);w.close();
+});
+test('repetição atravessa o ano e fevereiro bissexto mantendo os mesmos valores',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,repeatCash(w,fillCash(w,{date:'2027-12-31'}),'2028-03'));await tick();assert.deepEqual(Array.from(w.eval('db.cashEntries'),e=>e.date),['2027-12-31','2028-01-31','2028-02-29','2028-03-31']);w.close();
+});
+test('mês final inválido bloqueia a série inteira sem gravar despesas',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;const f=repeatCash(w,fillCash(w,{date:'2027-01-31'}),'2026-12'),before=w.eval('JSON.stringify(db.cashEntries)');submitForm(w,f);await tick();assert.equal(w.eval('JSON.stringify(db.cashEntries)'),before);assert.match(w.document.getElementById('toast').textContent,/mês final/);assert.equal(w.document.getElementById('modal').open,true);w.close();
+});
+test('cancelar repetição ou trocar para gasto variável não gera meses extras',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;repeatCash(w,fillCash(w),'2027-03');const before=w.eval('JSON.stringify(db.cashEntries)');w.closeModal();assert.equal(w.eval('JSON.stringify(db.cashEntries)'),before);
+ const f=repeatCash(w,fillCash(w),'2027-03');f.elements.category.value='Gasto variável';f.elements.category.dispatchEvent(new w.Event('change'));assert.equal(f.querySelector('#cash-recurring').hidden,true);assert.equal(f.elements.repeatUntil.disabled,true);submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries.length'),1);assert.equal(w.eval('db.cashEntries[0].recurrenceId'),undefined);w.close();
+});
+test('repetir gasto já cadastrado preserva o original e acrescenta somente os meses seguintes',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;w.eval("db.cashEntries=[{id:'existing-fixed',date:'2026-11-30',type:'saida',category:'Gasto fixo',description:'Despesa cadastrada',amount:123.45,pro:'pA'},{id:'unrelated',date:'2026-11-20',type:'saida',category:'Gasto fixo',description:'Outra despesa',amount:9}]");
+ w.setFinanceTab('Caixa');w.go('finance');assert.match(w.document.querySelector('.cash-table tbody').textContent,/Repetir mensalmente/);
+ w.cashEntryForm('existing-fixed');const f=w.document.getElementById('form');assert.equal(f.elements.amount.readOnly,true);f.elements.repeatUntil.value='2027-01';submitForm(w,f);await tick();
+ const rows=Array.from(w.eval('db.cashEntries'));assert.equal(rows.length,4);assert.equal(rows.filter(e=>e.id==='existing-fixed').length,1);assert.deepEqual(rows.filter(e=>e.recurrenceId).map(e=>e.date),['2026-11-30','2026-12-30','2027-01-30']);assert.equal(rows.find(e=>e.id==='existing-fixed').amount,123.45);assert.ok(rows.filter(e=>e.recurrenceId).every(e=>e.pro==='pA'));assert.equal(rows.find(e=>e.id==='unrelated').amount,9);w.close();
+});
+test('série de gastos é enviada de uma vez e clique duplicado espera a confirmação do servidor',async()=>{
+ let reply,started;const sent=new Promise(r=>started=r),requests=[];
+ const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url,options)=>{if(url==='/api/workspace'){requests.push(JSON.parse(options.body));started();return new Promise(resolve=>reply=resolve);}return {ok:true,json:async()=>({configured:true})};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
+ const f=repeatCash(w,fillCash(w,{date:'2026-12-31'}),'2027-02');submitForm(w,f);submitForm(w,f);await sent;assert.equal(requests.length,1);assert.deepEqual(requests[0].data.cashEntries.map(e=>e.date),['2026-12-31','2027-01-31','2027-02-28']);assert.equal(f.querySelector('[type="submit"]').disabled,true);
+ reply({ok:true,json:async()=>({revision:8})});await w.OlhanCloud.flush();await tick();assert.equal(w.eval('db.cashEntries.length'),3);assert.equal(w.document.getElementById('modal').open,false);w.close();
+});
+test('falha de servidor na série conserva a revisão sem repetir despesas ao tentar de novo',async()=>{
+ let posts=0;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url)=>{if(url==='/api/workspace')posts++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha de servidor'}:{configured:true}};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
+ const f=repeatCash(w,fillCash(w),'2027-02');submitForm(w,f);await tick();await tick();assert.equal(w.document.getElementById('modal').open,true);assert.equal(w.eval('db.cashEntries.length'),3);assert.match(f.querySelector('#cash-save-status').textContent,/sem confirmação/);f.elements.repeatUntil.value='2027-03';submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries.length'),3);assert.equal(posts,1);w.close();
+});
