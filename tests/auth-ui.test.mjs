@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 const html=await readFile(new URL('../login.html',import.meta.url),'utf8'),script=await readFile(new URL('../auth-ui.js',import.meta.url),'utf8');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-async function app(hash='',fetcher=async()=>({ok:true,json:async()=>null})){
-  const dom=new JSDOM(html,{url:'https://clinic.example/login.html'+hash,runScripts:'outside-only'});dom.window.fetch=async(...args)=>{const response=await fetcher(...args);if(!response.text)response.text=async()=>JSON.stringify(await response.json());return response};dom.window.eval(script);await tick();return dom;
+async function app(hash='',fetcher=async()=>({ok:true,json:async()=>null}),setup){
+  const dom=new JSDOM(html,{url:'https://clinic.example/login.html'+hash,runScripts:'outside-only'});setup?.(dom.window);dom.window.fetch=async(...args)=>{const response=await fetcher(...args);if(!response.text)response.text=async()=>JSON.stringify(await response.json());return response};dom.window.eval(script);await tick();return dom;
 }
 test('primeiro acesso abre formulário e envia somente e-mail cadastrado',async()=>{
   const calls=[];const dom=await app('',async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>null}}),w=dom.window;
@@ -19,7 +19,9 @@ test('manter conectado é escolha explícita e não salva senha no armazenamento
     assert.equal(form.elements.email.autocomplete,'username');assert.equal(form.elements.password.autocomplete,'current-password');
     form.elements.email.value='owner@example.test';form.elements.password.value='Senha-apenas-no-teste-123';form.elements.remember.checked=remember;
     form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
-    assert.equal(JSON.parse(calls.at(-1).options.body).rememberMe,remember);assert.equal(w.localStorage.length,0);assert.equal(w.sessionStorage.length,0);w.close();
+    assert.equal(JSON.parse(calls.at(-1).options.body).rememberMe,remember);assert.equal(w.localStorage.length,remember?1:0);assert.equal(w.sessionStorage.length,0);
+    if(remember){const saved=JSON.parse(w.localStorage.getItem('olhan-remember-login'));assert.equal(saved.remember,true);assert.deepEqual(Object.keys(saved).sort(),['remember','until']);assert.ok(saved.until>Date.now());}
+    assert.ok(!JSON.stringify(w.localStorage).includes('Senha-apenas-no-teste'));assert.ok(!JSON.stringify(w.localStorage).includes('owner@example.test'));w.close();
   }
 });
 test('resposta não JSON na entrada mostra orientação em português sem apagar os campos',async()=>{
@@ -53,5 +55,26 @@ test('login mostra a logo oficial e mantém a escolha de 30 dias na confirmaçã
  form=w.document.querySelector('form');form.elements.code.value='12345678';
  form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
  const request=calls.find(c=>c.url.endsWith('verify-otp'));assert.equal(JSON.parse(request.options.body).rememberMe,true);assert.equal(JSON.parse(request.options.body).trustDevice,false);
- assert.equal(w.localStorage.length,0);assert.equal(w.sessionStorage.length,0);w.close();
+ assert.equal(w.localStorage.length,1);assert.equal(w.sessionStorage.length,0);w.close();
+});
+
+test('nova aba de confirmação e retorno ao login preservam a escolha explícita de 30 dias',async()=>{
+ const dom=await app('',async url=>({ok:true,json:async()=>url.endsWith('get-session')?null:{twoFactorRedirect:true}})),w=dom.window;
+ const form=w.document.querySelector('form');form.elements.email.value='owner@example.test';form.elements.password.value='Senha-de-teste-123';form.elements.remember.checked=true;form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();
+ const saved=w.localStorage.getItem('olhan-remember-login');w.close();
+ const calls=[],restored=await app('#confirm=12345678',async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({status:true})}},v=>v.localStorage.setItem('olhan-remember-login',saved));
+ const f=restored.window.document.querySelector('form');f.dispatchEvent(new restored.window.Event('submit',{cancelable:true}));await tick();assert.equal(JSON.parse(calls[0].options.body).rememberMe,true);assert.equal(JSON.parse(calls[0].options.body).trustDevice,false);restored.window.close();
+ const reopened=await app('',undefined,v=>v.localStorage.setItem('olhan-remember-login',saved));assert.equal(reopened.window.document.querySelector('[name="remember"]').checked,true);reopened.window.close();
+});
+test('desmarcar a escolha retira a preferência e nova aba não solicita sessão longa',async()=>{
+ const saved=JSON.stringify({remember:true,until:Date.now()+600000});
+ const dom=await app('',async url=>({ok:true,json:async()=>url.endsWith('get-session')?null:{twoFactorRedirect:true}}),w=>w.localStorage.setItem('olhan-remember-login',saved)),w=dom.window;
+ const form=w.document.querySelector('form');form.elements.email.value='owner@example.test';form.elements.password.value='Senha-de-teste-123';form.elements.remember.checked=false;form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();assert.equal(w.localStorage.getItem('olhan-remember-login'),null);w.close();
+});
+test('preferência vencida ou inválida não ativa manter conectado e armazenamento indisponível não bloqueia login',async()=>{
+ for(const saved of ['invalid',JSON.stringify({remember:true,until:Date.now()-1})]){
+  const dom=await app('',undefined,w=>w.localStorage.setItem('olhan-remember-login',saved));assert.equal(dom.window.document.querySelector('[name="remember"]').checked,false);assert.equal(dom.window.localStorage.length,0);dom.window.close();
+ }
+ const calls=[],dom=await app('',async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>url.endsWith('get-session')?null:{twoFactorRedirect:true}}},w=>Object.defineProperty(w,'localStorage',{get(){throw Error('unavailable')}})),w=dom.window;
+ const form=w.document.querySelector('form');form.elements.email.value='owner@example.test';form.elements.password.value='Senha-de-teste-123';form.elements.remember.checked=true;form.dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();w.document.querySelector('[name="code"]').value='12345678';w.document.querySelector('form').dispatchEvent(new w.Event('submit',{cancelable:true}));await tick();assert.equal(JSON.parse(calls.at(-1).options.body).rememberMe,true);w.close();
 });
