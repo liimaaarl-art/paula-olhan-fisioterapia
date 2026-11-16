@@ -224,11 +224,11 @@ test('saída entra no mês do pagamento mesmo quando o vencimento é de outro m�
  assert.equal(cashStat(w,'Saídas pagas'),w.eval('money(90)'));assert.match(w.document.querySelector('.cash-table tbody').textContent,/Pagamento posterior/);w.eval("financeFrom='2026-09-01';financeTo='2026-09-30'");w.render();assert.equal(cashStat(w,'Saídas pagas'),w.eval('money(0)'));w.close();
 });
 test('data futura de pagamento é rejeitada sem marcar a despesa como paga',async()=>{
- const dom=await financeScheduleApp(),w=dom.window;submitForm(w,fillCash(w,{date:'2026-11-14'}));await tick();w.cashPaymentForm(w.eval('db.cashEntries[0].id'));const f=w.document.getElementById('form');f.elements.paymentStatus.value='paid';f.elements.paidDate.value='2026-11-15';submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries[0].paid'),false);assert.match(w.document.getElementById('toast').textContent,/futuro/);w.close();
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,fillCash(w,{date:'2026-11-14'}));await tick();w.cashPaymentForm(w.eval('db.cashEntries[0].id'));const f=w.document.getElementById('form');f.elements.paymentStatus.value='paid';f.elements.paymentStatus.dispatchEvent(new w.Event('change'));f.elements.paidDate.value='2026-11-15';submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries[0].paid'),false);assert.match(w.document.getElementById('toast').textContent,/futuro/);w.close();
 });
 test('falha do servidor no pagamento mantém a revisão aberta e não envia a alteração de novo',async()=>{
  let writes=0;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url)=>{if(url==='/api/workspace')writes++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha simulada'}:{configured:true}}}}),w=dom.window;
- w.eval("db.cashEntries=[{id:'pay-failure',date:'2026-11-14',type:'saida',category:'Outros',amount:80,description:'Despesa',paid:false}]");w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.cashPaymentForm('pay-failure');const f=w.document.getElementById('form');f.elements.paymentStatus.value='paid';f.elements.paidDate.value='2026-11-14';submitForm(w,f);await tick();await tick();
+ w.eval("db.cashEntries=[{id:'pay-failure',date:'2026-11-14',type:'saida',category:'Outros',amount:80,description:'Despesa',paid:false}]");w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.cashPaymentForm('pay-failure');const f=w.document.getElementById('form');f.elements.paymentStatus.value='paid';f.elements.paymentStatus.dispatchEvent(new w.Event('change'));f.elements.paidDate.value='2026-11-14';submitForm(w,f);await tick();await tick();
  assert.equal(w.document.getElementById('modal').open,true);assert.match(f.querySelector('#cash-payment-status').textContent,/sem confirmação/);submitForm(w,f);await tick();assert.equal(writes,1);w.close();
 });
 test('upload ao servidor mantém a pasta escolhida para vários arquivos',async()=>{
@@ -256,4 +256,10 @@ test('mover anexo mantém identidade e conteúdo do arquivo e aguarda confirmaç
  w.eval("db.files=[{id:'"+fid+"',cloudId:'"+fid+"',patient:'p1',name:'Documento.pdf',type:'application/pdf',date:today,folder:'Geral',data:'/api/files?id="+fid+"'}]");w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.go('patients');w.eval("patientId='p1';patientTab='Anexos';render()");w.movePatientFile(fid);
  const f=w.document.getElementById('form');f.elements.folder.value='Registros de atendimento';submitForm(w,f);await sent;assert.equal(w.document.getElementById('modal').open,true);assert.equal(f.querySelector('[type="submit"]').disabled,true);reply({ok:true,json:async()=>({revision:8})});await w.OlhanCloud.flush();await tick();
  assert.equal(w.eval('db.files[0].folder'),'Registros de atendimento');assert.equal(w.eval('db.files[0].id'),fid);assert.equal(w.eval('db.files[0].data'),'/api/files?id='+fid);assert.equal(w.document.getElementById('modal').open,false);w.close();
+});
+
+test('exportação separa pendentes e pagos e usa os mesmos totais do Caixa',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;
+ w.eval("db.cashEntries=[{id:'p',type:'saida',category:'Outros',description:'Quitada',amount:100,date:'2026-11-12',paid:true,paidDate:'2026-11-13'},{id:'n',type:'saida',category:'Outros',description:'Pendente',amount:200,date:'2026-11-20',paid:false},{id:'l',type:'saida',category:'Outros',description:'Anterior',amount:300,date:'2026-11-20'}];download=(name,content,type)=>{window.__cashExport={name,content,type}}");
+ w.exportCashCSV();const csv=w.__cashExport.content;assert.match(csv,/"SAÍDAS PAGAS";"";"";"";"100\.00"/);assert.match(csv,/"PENDENTES \/ A CONFERIR";"";"";"";"500\.00"/);assert.match(csv,/Conferir pagamento/);assert.match(csv,/2026-11-13/);w.close();
 });
