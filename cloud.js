@@ -64,7 +64,8 @@
  save=persist;
  const oldToast=toast;toast=function(message){if(running&&/salv|registrad|atualizad|criad|anexad|excluí|removid/i.test(message))return oldToast('Alteração em processamento. Confira a confirmação de salvamento no servidor.');return oldToast(message);};
  window.addEventListener('beforeunload',e=>{if(running||pending!==null||exclusive){e.preventDefault();e.returnValue='';}});
- uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>52428800)return toast('Limite de 50 MB por arquivo.');const pid=patientId,folder=typeof patientFileFolderFilter==='string'&&patientFileFolderFilter!=='Todos'?patientFileFolderFilter:'Geral';
+ uploadFile=async function(el){const file=el.files?.[0];el.value='';if(!file)return;if(file.size>52428800)return toast('Limite de 50 MB por arquivo.');const pid=el.dataset?.patient||patientId,folder=el.dataset?.folder||'Geral';
+  if(!db.patients.some(p=>p.id===pid)||!db.fileFolders?.includes(folder))return toast('Abra o prontuário e selecione uma pasta válida antes de anexar.');
   try{await OlhanCloud.flush();status('Enviando arquivo ao servidor…');const item=await sendFile(file,pid,file.name,file.type);db.files.push({...item,cloudId:item.id,patient:pid,folder,date:today});persist();await OlhanCloud.flush();render();}
   catch(e){status(e.message||'Não foi possível salvar o arquivo.');}
  };

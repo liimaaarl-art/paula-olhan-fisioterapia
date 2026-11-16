@@ -197,3 +197,63 @@ test('falha de servidor na série conserva a revisão sem repetir despesas ao te
  let posts=0;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'};},fetcher:async(url)=>{if(url==='/api/workspace')posts++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha de servidor'}:{configured:true}};}}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
  const f=repeatCash(w,fillCash(w),'2027-02');submitForm(w,f);await tick();await tick();assert.equal(w.document.getElementById('modal').open,true);assert.equal(w.eval('db.cashEntries.length'),3);assert.match(f.querySelector('#cash-save-status').textContent,/sem confirmação/);f.elements.repeatUntil.value='2027-03';submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries.length'),3);assert.equal(posts,1);w.close();
 });
+
+function cashStat(w,label){return Array.from(w.document.querySelectorAll('.finance-summary .stat')).find(e=>e.querySelector('.stat-top').textContent.trim()===label)?.querySelector('strong').textContent}
+test('despesa nova fica a pagar e não reduz o saldo antes da confirmação',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window,f=fillCash(w,{date:'2026-11-14'});submitForm(w,f);await tick();
+ assert.equal(w.eval('db.cashEntries[0].paid'),false);assert.equal(cashStat(w,'Saídas pagas'),w.eval('money(0)'));assert.equal(cashStat(w,'A pagar / conferir'),w.eval('money(250.5)'));assert.match(w.document.querySelector('.cash-table tbody').textContent,/A pagar/);w.close();
+});
+test('pagar e desfazer pagamento alteram somente a despesa selecionada, sem duplicar a saída',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,fillCash(w,{date:'2026-11-01'}));await tick();const cid=w.eval('db.cashEntries[0].id');
+ for(const status of ['paid','paid','pending']){
+  w.cashPaymentForm(cid);const f=w.document.getElementById('form');f.elements.paymentStatus.value=status;f.elements.paymentStatus.dispatchEvent(new w.Event('change'));f.elements.paidDate.value='2026-11-14';submitForm(w,f);await tick();
+  assert.equal(w.eval('db.cashEntries.length'),1);assert.equal(cashStat(w,'Saídas pagas'),w.eval(status==='paid'?'money(250.5)':'money(0)'));
+ }
+ assert.equal(w.eval('db.cashEntries[0].date'),'2026-11-01');assert.equal(w.eval('db.cashEntries[0].paidDate'),'');w.close();
+});
+test('recorrência paga apenas o primeiro mês quando confirmado e mantém os demais pendentes',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window,f=repeatCash(w,fillCash(w,{date:'2026-11-14'}),'2027-01');f.elements.paymentStatus.value='paid';f.elements.paymentStatus.dispatchEvent(new w.Event('change'));f.elements.paidDate.value='2026-11-14';submitForm(w,f);await tick();
+ const rows=Array.from(w.eval('db.cashEntries'));assert.deepEqual(rows.map(e=>e.paid),[true,false,false]);assert.deepEqual(rows.map(e=>e.paidDate),['2026-11-14','','']);w.close();
+});
+test('lançamento antigo sem situação exige conferência e preserva os dados ao abrir o Caixa',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;w.eval("db.cashEntries=[{id:'legacy-cash',date:'2026-11-12',type:'saida',category:'Gasto fixo',amount:90,description:'Anterior'}]");const before=w.eval('JSON.stringify(db.cashEntries)');w.setFinanceTab('Caixa');w.go('finance');
+ assert.match(w.document.querySelector('.cash-table tbody').textContent,/Conferir pagamento/);assert.equal(cashStat(w,'Saídas pagas'),w.eval('money(0)'));assert.equal(w.eval('JSON.stringify(db.cashEntries)'),before);w.close();
+});
+test('saída entra no mês do pagamento mesmo quando o vencimento é de outro mês',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;w.eval("db.cashEntries=[{id:'old-due',date:'2026-09-15',type:'saida',category:'Outros',amount:90,description:'Pagamento posterior',paid:true,paidDate:'2026-11-10'}]");w.setFinanceTab('Caixa');w.go('finance');
+ assert.equal(cashStat(w,'Saídas pagas'),w.eval('money(90)'));assert.match(w.document.querySelector('.cash-table tbody').textContent,/Pagamento posterior/);w.eval("financeFrom='2026-09-01';financeTo='2026-09-30'");w.render();assert.equal(cashStat(w,'Saídas pagas'),w.eval('money(0)'));w.close();
+});
+test('data futura de pagamento é rejeitada sem marcar a despesa como paga',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;submitForm(w,fillCash(w,{date:'2026-11-14'}));await tick();w.cashPaymentForm(w.eval('db.cashEntries[0].id'));const f=w.document.getElementById('form');f.elements.paymentStatus.value='paid';f.elements.paidDate.value='2026-11-15';submitForm(w,f);await tick();assert.equal(w.eval('db.cashEntries[0].paid'),false);assert.match(w.document.getElementById('toast').textContent,/futuro/);w.close();
+});
+test('falha do servidor no pagamento mantém a revisão aberta e não envia a alteração de novo',async()=>{
+ let writes=0;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url)=>{if(url==='/api/workspace')writes++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha simulada'}:{configured:true}}}}),w=dom.window;
+ w.eval("db.cashEntries=[{id:'pay-failure',date:'2026-11-14',type:'saida',category:'Outros',amount:80,description:'Despesa',paid:false}]");w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.cashPaymentForm('pay-failure');const f=w.document.getElementById('form');f.elements.paymentStatus.value='paid';f.elements.paidDate.value='2026-11-14';submitForm(w,f);await tick();await tick();
+ assert.equal(w.document.getElementById('modal').open,true);assert.match(f.querySelector('#cash-payment-status').textContent,/sem confirmação/);submitForm(w,f);await tick();assert.equal(writes,1);w.close();
+});
+test('upload ao servidor mantém a pasta escolhida para vários arquivos',async()=>{
+ let n=0,lastId='',written;const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url,options)=>{
+  const b=JSON.parse(options?.body||'{}');if(url==='/api/workspace'){written=b.data;return {ok:true,json:async()=>({revision:8+n})}}
+  if(url==='/api/media-upload'){if(b.action==='init'){lastId='00000000-0000-4000-8000-'+String(++n).padStart(12,'0');return {ok:true,json:async()=>({id:lastId,chunks:1,chunkSize:2097152})}}if(b.action==='finish')return {ok:true,json:async()=>({id:lastId,data:'/api/files?id='+lastId,type:'application/pdf',name:'Anexo.pdf'})}}
+  return {ok:true,json:async()=>({configured:true})};
+ }}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.go('patients');w.eval("patientId='p1';patientTab='Anexos';render()");w.setFileFolderFilter('Registros de atendimento');
+ for(let i=0;i<2;i++){const input=w.document.querySelector('input[type="file"][data-folder]');assert.equal(input.dataset.folder,'Registros de atendimento');Object.defineProperty(input,'files',{value:[new w.File(['pdf'],'Anexo.pdf',{type:'application/pdf'})]});await w.uploadFile(input)}
+ const created=written.files.filter(f=>f.cloudId);assert.equal(created.length,2);assert.ok(created.every(f=>f.folder==='Registros de atendimento'&&f.patient==='p1'));assert.equal(w.eval("db.files.filter(f=>f.folder==='Registros de atendimento').length"),2);w.close();
+});
+test('upload captura paciente e pasta antes de navegar durante o envio',async()=>{
+ let release,started,lastId='00000000-0000-4000-8000-000000000111';const sent=new Promise(r=>started=r);
+ const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url,options)=>{const b=JSON.parse(options?.body||'{}');
+  if(url==='/api/media-upload'&&b.action==='init'){started();await new Promise(r=>release=r);return {ok:true,json:async()=>({id:lastId,chunks:1,chunkSize:2097152})}}
+  if(url==='/api/media-upload'&&b.action==='finish')return {ok:true,json:async()=>({id:lastId,data:'/api/files?id='+lastId,type:'application/pdf',name:'Arquivo.pdf'})};
+  return {ok:true,json:async()=>url==='/api/workspace'?{revision:8}:{configured:true}};
+ }}),w=dom.window;w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.go('patients');w.eval("patientId='p1';patientTab='Anexos';render()");w.setFileFolderFilter('Exames');
+ const input=w.document.querySelector('input[type="file"][data-folder]');Object.defineProperty(input,'files',{value:[new w.File(['pdf'],'Arquivo.pdf',{type:'application/pdf'})]});const uploading=w.uploadFile(input);await sent;w.eval("patientId='p2';render()");w.setFileFolderFilter('Geral');release();await uploading;
+ const file=w.eval('db.files.find(f=>f.cloudId)');assert.equal(file.patient,'p1');assert.equal(file.folder,'Exames');w.close();
+});
+test('mover anexo mantém identidade e conteúdo do arquivo e aguarda confirmação do servidor',async()=>{
+ let reply,started;const sent=new Promise(r=>started=r),fid='00000000-0000-4000-8000-000000000222';
+ const dom=await financeScheduleApp({setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url)=>{if(url==='/api/workspace'){started();return new Promise(r=>reply=r)}return {ok:true,json:async()=>({configured:true})}}}),w=dom.window;
+ w.eval("db.files=[{id:'"+fid+"',cloudId:'"+fid+"',patient:'p1',name:'Documento.pdf',type:'application/pdf',date:today,folder:'Geral',data:'/api/files?id="+fid+"'}]");w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.go('patients');w.eval("patientId='p1';patientTab='Anexos';render()");w.movePatientFile(fid);
+ const f=w.document.getElementById('form');f.elements.folder.value='Registros de atendimento';submitForm(w,f);await sent;assert.equal(w.document.getElementById('modal').open,true);assert.equal(f.querySelector('[type="submit"]').disabled,true);reply({ok:true,json:async()=>({revision:8})});await w.OlhanCloud.flush();await tick();
+ assert.equal(w.eval('db.files[0].folder'),'Registros de atendimento');assert.equal(w.eval('db.files[0].id'),fid);assert.equal(w.eval('db.files[0].data'),'/api/files?id='+fid);assert.equal(w.document.getElementById('modal').open,false);w.close();
+});
