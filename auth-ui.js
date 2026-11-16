@@ -6,7 +6,22 @@
     location.replace(new URL('/login.html' + location.search + location.hash, canonicalOrigin).href);
     return;
   }
+  // This stores only the explicit browser preference, never credentials or
+  // session tokens. Keep it across an e-mail link/new tab for at most 30 days.
+  const rememberKey = 'olhan-remember-login';
   let rememberLogin;
+  try {
+    const saved = JSON.parse(localStorage.getItem(rememberKey));
+    if (saved?.remember === true && Number.isFinite(saved.until) && saved.until > Date.now()) rememberLogin = true;
+    else localStorage.removeItem(rememberKey);
+  } catch { try { localStorage.removeItem(rememberKey); } catch {} }
+  function rememberChoice(value) {
+    rememberLogin = value;
+    try {
+      if (value) localStorage.setItem(rememberKey, JSON.stringify({ remember: true, until: Date.now() + 30 * 24 * 60 * 60 * 1000 }));
+      else localStorage.removeItem(rememberKey);
+    } catch {}
+  }
   const initial = new URLSearchParams(location.hash.slice(1));
   const resetToken = initial.get('reset'), confirmCode = initial.get('confirm');
   const account = location.hash === '#account';
@@ -43,9 +58,10 @@
     form('<h1>Acessar o sistema</h1><p>Use seu e-mail e senha. Depois, confirme o acesso pelo link enviado ao seu e-mail.</p><form id="login-form" method="post" action="/api/auth/sign-in/email">' + input('E-mail cadastrado', 'email', 'email', 'username') + input('Senha', 'password', 'password', 'current-password') + '<label class="remember-choice"><input name="remember" type="checkbox"><span>Manter conectado neste navegador por 30 dias</span></label><p class="note">Marque em um aparelho de uso pessoal. Você entrará direto enquanto a sessão estiver válida. Para salvar a senha, use a opção oferecida pelo navegador.</p><p class="browser-note">No celular, acesse sempre pelo mesmo Safari ou Chrome, fora do navegador interno do WhatsApp ou do e-mail.</p><button type="submit">Entrar</button></form><a class="text-link" href="#" id="forgot">Primeiro acesso ou esqueci minha senha</a>', async data => {
       const result = await api('sign-in/email', { email: data.get('email').trim(), password: data.get('password'), rememberMe: data.get('remember') === 'on' });
       if (result?.twoFactorRedirect !== true) throw new Error('Não foi possível iniciar a confirmação do acesso. Tente entrar novamente.');
-      rememberLogin = data.get('remember') === 'on';
+      rememberChoice(data.get('remember') === 'on');
       challenge();
     });
+    content.querySelector('[name="remember"]').checked = rememberLogin === true;
     document.getElementById('forgot').onclick = e => { e.preventDefault(); resetRequest(); };
   }
   function resetRequest() {
