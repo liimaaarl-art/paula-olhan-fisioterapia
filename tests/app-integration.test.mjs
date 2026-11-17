@@ -263,3 +263,43 @@ test('exportação separa pendentes e pagos e usa os mesmos totais do Caixa',asy
  w.eval("db.cashEntries=[{id:'p',type:'saida',category:'Outros',description:'Quitada',amount:100,date:'2026-11-12',paid:true,paidDate:'2026-11-13'},{id:'n',type:'saida',category:'Outros',description:'Pendente',amount:200,date:'2026-11-20',paid:false},{id:'l',type:'saida',category:'Outros',description:'Anterior',amount:300,date:'2026-11-20'}];download=(name,content,type)=>{window.__cashExport={name,content,type}}");
  w.exportCashCSV();const csv=w.__cashExport.content;assert.match(csv,/"SAÍDAS PAGAS";"";"";"";"100\.00"/);assert.match(csv,/"PENDENTES \/ A CONFERIR";"";"";"";"500\.00"/);assert.match(csv,/Conferir pagamento/);assert.match(csv,/2026-11-13/);w.close();
 });
+
+async function treatmentApp(asOf='2026-11-14',options={}){
+ const setup=options.setup;
+ return financeScheduleApp({...options,setup(w){const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[asOf+'T15:00:00Z']))}static now(){return NativeDate.parse(asOf+'T15:00:00Z')}};setup?.(w)}});
+}
+test('prontuário calcula tempo de tratamento por calendário, incluindo fim de mês e ano bissexto',async()=>{
+ for(const [start,asOf,expected] of [['2026-11-14','2026-11-14','Iniciado hoje'],['2026-11-13','2026-11-14','1 dia'],['2025-09-10','2026-11-14','1 ano, 2 meses e 4 dias'],['2027-01-31','2027-02-28','1 mês'],['2027-01-31','2027-03-01','1 mês e 1 dia'],['2024-02-29','2025-02-28','1 ano'],['2024-02-29','2024-03-28','28 dias']]){
+  const dom=await treatmentApp(asOf),w=dom.window;w.eval(`patient('p1').treatmentStartDate='${start}'`);w.openPatient('p1');assert.equal(w.document.querySelector('[data-treatment-elapsed]').textContent,expected,start+' → '+asOf);w.close();
+ }
+});
+test('paciente antigo sem data mostra Não informado e não usa atendimentos ou avaliações para inventar início',async()=>{
+ const dom=await treatmentApp(),w=dom.window;const before=w.eval('JSON.stringify(db.patients)');w.openPatient('p1');assert.match(w.document.querySelector('.treatment-overview').textContent,/Não informado/);assert.equal(w.document.querySelector('[data-treatment-elapsed]').textContent,'—');assert.equal(w.eval('JSON.stringify(db.patients)'),before);
+ w.document.querySelector('.treatment-overview button').click();assert.ok(w.document.querySelector('[name="treatmentStartDate"]'));w.close();
+});
+test('cadastro novo e edição de paciente existente salvam a data, que continua após reabrir o sistema',async()=>{
+ const dom=await treatmentApp(),w=dom.window;w.patientForm();let form=w.document.getElementById('form');form.elements.name.value='Paciente fictício';form.elements.treatmentStartDate.value='2026-10-14';submitForm(w,form);assert.equal(w.eval('db.patients.at(-1).treatmentStartDate'),'2026-10-14');
+ w.patientForm('p1');form=w.document.getElementById('form');form.elements.treatmentStartDate.value='2026-08-14';submitForm(w,form);const stored=JSON.parse(w.localStorage.getItem('olhan-v1'));w.close();
+ const reopened=await treatmentApp('2026-11-15',{stored});reopened.window.openPatient('p1');assert.equal(reopened.window.document.querySelector('[data-treatment-elapsed]').textContent,'3 meses e 1 dia');reopened.window.close();
+});
+test('edição rápida altera somente o início do paciente escolhido e permite limpar a data',async()=>{
+ const dom=await treatmentApp(),w=dom.window;const other=w.eval("JSON.stringify(patient('p2'))");w.openPatient('p1');w.patientTreatmentForm('p1');let form=w.document.getElementById('form');form.elements.treatmentStartDate.value='2026-09-14';submitForm(w,form);await tick();assert.equal(w.document.querySelector('[data-treatment-elapsed]').textContent,'2 meses');assert.equal(w.eval("JSON.stringify(patient('p2'))"),other);
+ w.patientTreatmentForm('p1');form=w.document.getElementById('form');form.elements.treatmentStartDate.value='';submitForm(w,form);await tick();assert.match(w.document.querySelector('.treatment-overview').textContent,/Não informado/);w.close();
+});
+test('início futuro ou anterior ao nascimento é recusado sem alterar o paciente',async()=>{
+ const dom=await treatmentApp(),w=dom.window;w.eval("patient('p1').birth='2000-01-01'");const before=w.eval("JSON.stringify(patient('p1'))");
+ for(const date of ['2026-11-15','1999-12-31']){w.patientTreatmentForm('p1');const form=w.document.getElementById('form');form.elements.treatmentStartDate.value=date;submitForm(w,form);await tick();assert.equal(w.eval("JSON.stringify(patient('p1'))"),before);assert.equal(w.document.getElementById('modal').open,true);w.closeModal()}
+ w.patientForm('p1');const form=w.document.getElementById('form');form.elements.treatmentStartDate.value='2026-11-15';submitForm(w,form);assert.equal(w.eval("JSON.stringify(patient('p1'))"),before);w.close();
+});
+test('data de tratamento vinda de backup inválido ou futuro não gera tempo negativo',async()=>{
+ const dom=await treatmentApp(),w=dom.window;for(const date of ['2026-02-30','2027-01-01']){w.eval(`patient('p1').treatmentStartDate='${date}'`);w.openPatient('p1');assert.match(w.document.querySelector('.treatment-overview').textContent,/Data a conferir/);assert.equal(w.document.querySelector('[data-treatment-elapsed]').textContent,'—')}w.close();
+});
+test('início do tratamento espera a confirmação do servidor e bloqueia duplo clique',async()=>{
+ let reply,started;const sent=new Promise(r=>started=r),requests=[];const dom=await treatmentApp('2026-11-14',{setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url,options)=>{if(url==='/api/workspace'){requests.push(JSON.parse(options.body));started();return new Promise(r=>reply=r)}return {ok:true,json:async()=>({configured:true})}}}),w=dom.window;
+ w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.openPatient('p1');w.patientTreatmentForm('p1');const form=w.document.getElementById('form');form.elements.treatmentStartDate.value='2026-10-14';submitForm(w,form);submitForm(w,form);await sent;assert.equal(requests.length,1);assert.equal(requests[0].data.patients.find(p=>p.id==='p1').treatmentStartDate,'2026-10-14');assert.equal(form.querySelector('[type="submit"]').disabled,true);assert.equal(w.document.getElementById('modal').open,true);
+ reply({ok:true,json:async()=>({revision:8})});await w.OlhanCloud.flush();await tick();assert.equal(w.document.getElementById('modal').open,false);assert.equal(w.document.querySelector('[data-treatment-elapsed]').textContent,'1 mês');w.close();
+});
+test('falha do servidor ao salvar o início mantém a revisão sem confirmar sucesso',async()=>{
+ let posts=0;const dom=await treatmentApp('2026-11-14',{setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url)=>{if(url==='/api/workspace')posts++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha simulada'}:{configured:true}}}}),w=dom.window;
+ w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.patientTreatmentForm('p1');const form=w.document.getElementById('form');form.elements.treatmentStartDate.value='2026-10-14';submitForm(w,form);await tick();await tick();assert.equal(w.document.getElementById('modal').open,true);assert.match(form.querySelector('#treatment-save-status').textContent,/sem confirmação/);submitForm(w,form);await tick();assert.equal(posts,1);w.close();
+});

@@ -142,6 +142,12 @@ return `<div class="time-grid-scroll"><div class="time-grid" style="--days:${day
 const originalHtml=document.documentElement.outerHTML;function downloadHtml(){download('Olhan_App_v4.html','<!doctype html>\n'+originalHtml,'text/html;charset=utf-8')}render();setMenu(!window.matchMedia('(max-width:700px)').matches,false);
 </script>
 <style id="olhan-v5-styles">
+.treatment-overview{display:flex;align-items:center;flex-wrap:wrap;gap:16px 28px;margin-top:18px;padding:16px;background:#edf4ef;border:1px solid #dce8df;border-radius:12px}
+.treatment-overview>div{flex:1;min-width:150px}
+.treatment-overview span{display:block;color:var(--muted);font-size:12px;margin-bottom:3px}
+.treatment-overview strong{display:block;color:var(--green);font-size:15px;font-weight:600}
+.treatment-overview button{flex-shrink:0}
+@media(max-width:480px){.treatment-overview{gap:12px}.treatment-overview>div{min-width:100%;flex-basis:100%}}
 .appointment-check{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:16px;height:16px;flex-shrink:0;margin-right:3px;border-radius:50%;background:#27734f;color:#fff;font:700 12px/1 sans-serif;text-decoration:none}
 .appointment-done{box-shadow:inset 3px 0 #27734f}
 .appointment-legend{display:flex;align-items:center;gap:7px;margin:0;padding:10px 18px;color:#315f59;font-size:12px;border-top:1px solid var(--line)}
@@ -259,10 +265,46 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
     return ps.length?ps.map(p=>`<section class="card patient"><div class="patient-top"><span class="avatar">${esc(initials(p.name))}</span><div><h3>${esc(p.name)}</h3><p>${esc(p.frequency||'Frequência não informada')}</p></div><span class="patient-status ${String(p.status||'Ativo').toLowerCase()}">${esc(p.status||'Ativo')}</span></div><div class="patient-info"><span>Responsável: ${esc(p.responsible||'Não informado')}</span><span>${esc(p.address||'Endereço não informado')}</span><span>Profissional: ${esc(professional(p.pro))}</span></div>${btn('Abrir prontuário',`openPatient('${p.id}')`,'file','soft')}</section>`).join(''):'<div class="empty">Nenhum paciente encontrado nesta pasta.</div>';
   };
 
+  function treatmentToday(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo'}).format(new Date())}
+  function treatmentDateError(date,birth){
+    if(!date)return '';
+    if(!validDate(date)||date>treatmentToday())return 'Informe uma data de início válida, igual ou anterior a hoje.';
+    if(validDate(birth)&&date<birth)return 'O início do tratamento não pode ser anterior ao nascimento.';
+    return '';
+  }
+  function treatmentElapsed(start,asOf=treatmentToday()){
+    if(!validDate(start)||!validDate(asOf)||start>asOf)return null;
+    const [year,month,day]=start.split('-').map(Number),[endYear,endMonth]=asOf.split('-').map(Number);
+    const atMonth=n=>{const absolute=year*12+month-1+n,y=Math.floor(absolute/12),m=absolute%12;
+      const date=new Date(0);date.setUTCHours(12,0,0,0);date.setUTCFullYear(y,m+1,0);const last=date.getUTCDate();date.setUTCFullYear(y,m,Math.min(day,last));return date.toISOString().slice(0,10)};
+    let months=(endYear-year)*12+endMonth-month;if(atMonth(months)>asOf)months--;
+    const days=Math.round((Date.parse(asOf+'T12:00:00Z')-Date.parse(atMonth(months)+'T12:00:00Z'))/864e5),years=Math.floor(months/12);months%=12;
+    const parts=[];if(years)parts.push(years+' '+(years===1?'ano':'anos'));if(months)parts.push(months+' '+(months===1?'mês':'meses'));if(days)parts.push(days+' '+(days===1?'dia':'dias'));
+    return parts.length>1?parts.slice(0,-1).join(', ')+' e '+parts.at(-1):parts[0]||'Iniciado hoje';
+  }
+  function treatmentOverview(p){
+    const start=p.treatmentStartDate,elapsed=treatmentElapsed(start),date=start&&elapsed?new Date(start+'T12:00:00Z').toLocaleDateString('pt-BR',{timeZone:'UTC'}):start?'Data a conferir':'Não informado';
+    return '<div class="treatment-overview"><div><span>Início do tratamento</span><strong>'+esc(date)+'</strong></div><div><span>Tempo desde o início</span><strong data-treatment-elapsed>'+esc(elapsed||'—')+'</strong></div><button type="button" class="btn secondary small" onclick="patientTreatmentForm(\''+esc(p.id)+'\')">'+(start?'Editar data':'Informar data')+'</button></div>';
+  }
+  window.patientTreatmentForm=function(pid){
+    const initial=db.patients.find(p=>p.id===pid);if(!initial)return;const before=initial.treatmentStartDate||'';let saving=false;
+    modal('Início do tratamento','<p><b>'+esc(initial.name)+'</b></p><div class="formgrid">'+field('treatmentStartDate','Data de início do tratamento',before,'date','max="'+treatmentToday()+'"'+(validDate(initial.birth)?' min="'+initial.birth+'"':''))+'</div><p class="note">Informe quando a fisioterapia começou. O tempo desde o início é atualizado automaticamente no prontuário.</p><p id="treatment-save-status" role="status" aria-live="polite"></p>',async data=>{
+      if(saving)return;if(window.OlhanCloud?.status().blocked)return toast('Há alterações sem confirmação. Confira o aviso de salvamento.');
+      const patient=db.patients.find(p=>p.id===pid);if(!patient||(patient.treatmentStartDate||'')!==before)return toast('O cadastro mudou. Abra novamente para conferir.');
+      const error=treatmentDateError(data.treatmentStartDate,patient.birth);if(error)return toast(error);
+      const form=document.getElementById('form'),message=form.querySelector('#treatment-save-status'),controls=[...form.querySelectorAll('input,button')];saving=true;controls.forEach(c=>c.disabled=true);message.textContent='Salvando início do tratamento…';
+      try{patient.treatmentStartDate=data.treatmentStartDate;if(!save())throw Error('A data ainda não foi confirmada. Confira o aviso de salvamento.');if(window.OlhanCloud)await OlhanCloud.flush();
+        if(document.getElementById('form')===form)closeModal();render();toast('Início do tratamento salvo.');
+      }catch(e){message.textContent=e.message||'Não foi possível confirmar a data.'}
+      finally{saving=false;controls.forEach(c=>c.disabled=false)}
+    },'Salvar data');
+  };
+
   patientForm=function(pid){
     let p=db.patients.find(x=>x.id===pid)||{};
-    modal(pid?'Editar paciente':'Novo paciente',`<div class="formgrid">${field('name','Nome completo',p.name,'text','required')}${field('cpf','CPF',p.cpf,'text','placeholder="000.000.000-00"')}${field('birth','Data de nascimento',p.birth,'date',`max="${today}"`)}${select('status','Situação',[['Ativo','Ativo'],['Suspenso','Suspenso'],['Encerrado','Encerrado']],p.status||'Ativo')}${field('responsible','Familiar responsável',p.responsible)}${field('responsibleCpf','CPF do responsável',p.responsibleCpf,'text','placeholder="000.000.000-00"')}${field('phone','Telefone do responsável',p.phone,'tel')}${field('address','Endereço completo',p.address)}${select('pro','Profissional responsável',db.team.map(t=>[t.id,t.name]),p.pro)}${field('frequency','Frequência semanal',p.frequency||'2 vezes por semana')}${field('price','Valor por sessão (R$)',p.price??180,'number','min="0" step="0.01" required')}${select('cycle','Periodicidade do fechamento',['Semanal','Quinzenal','Mensal'],p.cycle||'Mensal')}${field('due','Dia de vencimento (mensal)',p.due||10,'number','min="1" max="28" required')}</div>`,data=>{
+    modal(pid?'Editar paciente':'Novo paciente',`<div class="formgrid">${field('name','Nome completo',p.name,'text','required')}${field('cpf','CPF',p.cpf,'text','placeholder="000.000.000-00"')}${field('birth','Data de nascimento',p.birth,'date',`max="${today}"`)}${field('treatmentStartDate','Início do tratamento',p.treatmentStartDate||'','date',`max="${treatmentToday()}"`)}${select('status','Situação',[['Ativo','Ativo'],['Suspenso','Suspenso'],['Encerrado','Encerrado']],p.status||'Ativo')}${field('responsible','Familiar responsável',p.responsible)}${field('responsibleCpf','CPF do responsável',p.responsibleCpf,'text','placeholder="000.000.000-00"')}${field('phone','Telefone do responsável',p.phone,'tel')}${field('address','Endereço completo',p.address)}${select('pro','Profissional responsável',db.team.map(t=>[t.id,t.name]),p.pro)}${field('frequency','Frequência semanal',p.frequency||'2 vezes por semana')}${field('price','Valor por sessão (R$)',p.price??180,'number','min="0" step="0.01" required')}${select('cycle','Periodicidade do fechamento',['Semanal','Quinzenal','Mensal'],p.cycle||'Mensal')}${field('due','Dia de vencimento (mensal)',p.due||10,'number','min="1" max="28" required')}</div>`,data=>{
       if(!data.name.trim())return toast('Informe o nome do paciente.');
+      const treatmentError=treatmentDateError(data.treatmentStartDate,data.birth);if(treatmentError)return toast(treatmentError);
       p=db.patients.find(x=>x.id===pid)||{};
       Object.assign(p,data,{price:Number(data.price),due:Number(data.due)});
       if(!pid){p.id=id();db.patients.push(p)}
@@ -509,7 +551,7 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
   detail=function(){
     let p=patient(patientId),rs=db.records.filter(r=>r.patient===patientId&&r.type===(patientTab==='Avaliações'?'Avaliação':'Evolução')).sort((a,b)=>b.created.localeCompare(a.created));
     return `<button class="textbtn" style="margin-bottom:20px" onclick="patientId=null;render()">← Todos os pacientes</button>`+head(esc(p.name),'Prontuário individual',patientTab==='Avaliações'?btn('Nova avaliação',`startEvaluation('${p.id}')`):btn('Novo registro',`recordForm('${p.id}')`,'plus'))+
-    `<div class="card" style="padding:22px;margin-bottom:22px"><div class="detailbanner"><span class="avatar">${esc(initials(p.name))}</span><div><h3>${esc(p.name)}</h3><p>${p.birth?new Date(p.birth+'T12:00:00').toLocaleDateString('pt-BR'):''} · ${esc(p.frequency||'')}</p></div><span class="patient-status ${String(p.status||'Ativo').toLowerCase()}">${esc(p.status||'Ativo')}</span><button class="textbtn" style="margin-left:auto" onclick="patientForm('${p.id}')">Editar cadastro</button></div><div class="formgrid"><p>Responsável: <b>${esc(p.responsible||'Não informado')}</b><br>Contato: ${esc(p.phone||'Não informado')}<br>CPF: ${esc(p.cpf||'Não informado')}</p><p>${esc(p.address||'Endereço não informado')}<br>${esc(professional(p.pro))} · ${money(p.price)} / sessão</p></div></div>`+
+    `<div class="card" style="padding:22px;margin-bottom:22px"><div class="detailbanner"><span class="avatar">${esc(initials(p.name))}</span><div><h3>${esc(p.name)}</h3><p>${p.birth?new Date(p.birth+'T12:00:00').toLocaleDateString('pt-BR'):''} · ${esc(p.frequency||'')}</p></div><span class="patient-status ${String(p.status||'Ativo').toLowerCase()}">${esc(p.status||'Ativo')}</span><button class="textbtn" style="margin-left:auto" onclick="patientForm('${p.id}')">Editar cadastro</button></div><div class="formgrid"><p>Responsável: <b>${esc(p.responsible||'Não informado')}</b><br>Contato: ${esc(p.phone||'Não informado')}<br>CPF: ${esc(p.cpf||'Não informado')}</p><p>${esc(p.address||'Endereço não informado')}<br>${esc(professional(p.pro))} · ${money(p.price)} / sessão</p></div>${treatmentOverview(p)}</div>`+
     `<div class="toolbar"><div class="segments">${['Evoluções','Avaliações','Anexos','Histórico'].map(t=>`<button class="${patientTab===t?'selected':''}" onclick="patientTab='${t}';render()">${t}</button>`).join('')}</div>${btn('Imprimir','window.print()','download','secondary small')}</div><section class="card">${patientTab==='Anexos'?filePanel(p):patientTab==='Histórico'?db.appointments.filter(a=>a.patient===p.id).sort((a,b)=>b.date.localeCompare(a.date)).map(a=>`<div class="record"><h3>${fmt(a.date)} · ${a.time} ${tag(a.status)}</h3><p>${esc(a.service)} · ${money(a.price)}</p>${(a.history||[]).map(h=>`<p>${esc(h)}</p>`).join('')}</div>`).join('')||'<div class="empty">Sem atendimentos.</div>':patientTab==='Avaliações'?(rs.length?rs.map(evaluationCard).join(''):'<div class="empty">Nenhuma avaliação. Use “Nova avaliação”.</div>'):rs.length?rs.map(r=>`<article class="record"><div style="display:flex;justify-content:space-between;gap:10px"><h3>Evolução · ${fmt(r.date)}</h3>${tag(professional(r.pro))}</div><p style="white-space:pre-wrap;font-size:14px;line-height:1.55">${esc(r.general||'')}</p>${[r.pa,r.fc,r.spo,r.pain,r.conduct,r.goal].some(Boolean)?`<details class="v5-complementary" style="margin-top:14px"><summary>Campos complementares</summary><div class="vitals">${[['PA',r.pa],['FC',r.fc],['SpO₂',r.spo],['Dor (0–10)',r.pain]].filter(x=>x[1]).map(x=>`<span>${x[0]}: ${esc(x[1])}</span>`).join('')}</div>${r.conduct?`<br><b>Condutas / procedimentos</b><p>${esc(r.conduct)}</p>`:''}${r.goal?`<br><b>Objetivos / orientações</b><p>${esc(r.goal)}</p>`:''}</details>`:''}<p style="font-size:10px;margin-top:18px">Registrado em ${new Date(r.created).toLocaleString('pt-BR')} · ${r.appointment?'Vinculado ao atendimento':'Registro avulso'}</p></article>`).join(''):'<div class="empty">Nenhuma evolução registrada.</div>'}</section>`;
   };
 
