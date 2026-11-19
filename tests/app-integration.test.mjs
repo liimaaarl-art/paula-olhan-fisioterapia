@@ -303,3 +303,38 @@ test('falha do servidor ao salvar o início mantém a revisão sem confirmar suc
  let posts=0;const dom=await treatmentApp('2026-11-14',{setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url)=>{if(url==='/api/workspace')posts++;return {ok:url!=='/api/workspace',json:async()=>url==='/api/workspace'?{error:'Falha simulada'}:{configured:true}}}}),w=dom.window;
  w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));w.patientTreatmentForm('p1');const form=w.document.getElementById('form');form.elements.treatmentStartDate.value='2026-10-14';submitForm(w,form);await tick();await tick();assert.equal(w.document.getElementById('modal').open,true);assert.match(form.querySelector('#treatment-save-status').textContent,/sem confirmação/);submitForm(w,form);await tick();assert.equal(posts,1);w.close();
 });
+
+const evolutionFixture={id:'edit-note',patient:'p1',appointment:'session-note',date:'2026-11-10',pro:'pA',type:'Evolução',created:'2026-11-10T16:00:00.000Z',general:'Texto original <sem marcação>',pain:0,fcFinal:'76',conduct:'Conduta inicial'};
+function openEvolutionToEdit(w){
+ w.eval(`db.records=[${JSON.stringify(evolutionFixture)},{...db.records[0],id:'other-note',patient:'p2'}];db.appointments=[{id:'session-note',patient:'p1',pro:'pA',date:'2026-11-10',time:'10:00',duration:60,price:100,status:'Realizado',service:'Fisioterapia domiciliar'}]`);
+ w.openPatient('p1');w.document.querySelector('[data-evolution-id="edit-note"]').click();return w.document.getElementById('form');
+}
+test('editar evolução mantém vínculo, autoria, data e versões anteriores após reabrir o prontuário',async()=>{
+ const dom=await treatmentApp(),w=dom.window,f=openEvolutionToEdit(w),untouched=w.eval('JSON.stringify({other:db.records[1],appointments:db.appointments})');
+ assert.equal(f.elements.general.value,evolutionFixture.general);assert.equal(f.elements.pain.value,'0');assert.equal(f.elements.fcFinal.value,'76');
+ f.elements.general.value='Texto corrigido';f.elements.fcFinal.value='78';submitForm(w,f);
+ assert.equal(w.document.getElementById('modal').open,false);
+ assert.equal(w.eval('JSON.stringify({other:db.records[1],appointments:db.appointments})'),untouched);
+ const saved=JSON.parse(w.localStorage.getItem('olhan-v1'));assert.equal(saved.records.length,2);
+ const {general,fcFinal,versions,updated,...metadata}=saved.records[0],{general:originalText,fcFinal:originalFC,...originalMetadata}=evolutionFixture;
+ assert.deepEqual(metadata,originalMetadata);assert.equal(general,'Texto corrigido');assert.equal(fcFinal,'78');assert.ok(updated);assert.equal(versions[0].snapshot.general,originalText);assert.equal(versions[0].snapshot.fcFinal,originalFC);w.close();
+ const reopened=await treatmentApp('2026-11-15',{stored:saved}),u=reopened.window;u.openPatient('p1');assert.match(u.document.querySelector('#app').textContent,/Texto corrigido/);assert.match(u.document.querySelector('#app').textContent,/Histórico de edições \(1\)/);
+ u.document.querySelector('[data-evolution-id="edit-note"]').click();const again=u.document.getElementById('form');again.elements.general.value='Segunda correção';submitForm(u,again);
+ assert.deepEqual(JSON.parse(u.localStorage.getItem('olhan-v1')).records[0].versions.map(v=>v.snapshot.general),[originalText,'Texto corrigido']);u.close();
+});
+test('edição inválida, sem mudanças ou desatualizada não sobrescreve o registro',async()=>{
+ const dom=await treatmentApp(),w=dom.window;let f=openEvolutionToEdit(w);const before=w.eval('JSON.stringify(db.records)');
+ f.elements.general.value='   ';submitForm(w,f);assert.match(f.querySelector('#evolution-edit-status').textContent,/Preencha/);
+ f.elements.general.value=evolutionFixture.general;f.elements.spo.value='101';submitForm(w,f);assert.match(f.querySelector('#evolution-edit-status').textContent,/Confira/);
+ f.elements.spo.value='';submitForm(w,f);assert.equal(w.eval('JSON.stringify(db.records)'),before);
+ w.editEvolution('edit-note');f=w.document.getElementById('form');w.eval("db.records[0].general='Versão mais recente'");f.elements.general.value='Correção desatualizada';submitForm(w,f);assert.match(f.querySelector('#evolution-edit-status').textContent,/O registro mudou/);assert.equal(w.eval('db.records[0].general'),'Versão mais recente');w.close();
+});
+test('editar evolução aguarda o servidor e mantém o formulário aberto se houver conflito de versão',async()=>{
+ let reply,started;const sent=new Promise(r=>started=r),requests=[];
+ const dom=await treatmentApp('2026-11-14',{setup(w){w.__OLHAN_CLOUD__={revision:7,data:null,role:'admin'}},fetcher:async(url,options)=>{if(url==='/api/workspace'){requests.push(JSON.parse(options.body));started();return new Promise(r=>reply=r)}return {ok:true,json:async()=>({configured:true})}}}),w=dom.window;
+ w.eval(fs.readFileSync(path.join(root,'cloud.js'),'utf8'));
+ const form=openEvolutionToEdit(w);form.elements.general.value='Correção pendente';submitForm(w,form);submitForm(w,form);await sent;
+ assert.equal(requests.length,1);assert.equal(requests[0].data.records[0].general,'Correção pendente');assert.equal(form.querySelector('[type="submit"]').disabled,true);
+ reply({ok:false,status:409,json:async()=>({error:'Conflito simulado'})});await assert.rejects(w.OlhanCloud.flush(),/sem confirmação/);await tick();
+ assert.equal(w.document.getElementById('modal').open,true);assert.equal(form.elements.general.value,'Correção pendente');assert.match(form.querySelector('#evolution-edit-status').textContent,/sem confirmação/);submitForm(w,form);assert.equal(requests.length,1);w.close();
+});

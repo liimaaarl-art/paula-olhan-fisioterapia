@@ -457,6 +457,54 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
     const form=document.getElementById('form');const sync=()=>{const a=db.appointments.find(x=>x.id===form.elements.appointment.value);if(a){form.elements.date.value=a.date;form.elements.pro.value=a.pro}form.elements.date.disabled=!!a;form.elements.pro.disabled=!!a};form.elements.appointment.onchange=sync;sync();
   };
 
+  const evolutionVitals=[
+    ['pa','Pressão arterial (mmHg)','PA'],['fc','Frequência cardíaca (bpm)','FC',300],['spo','SpO₂ (%)','SpO₂',100],['pain','Dor (0 a 10)','Dor (0–10)',10],
+    ['paFinal','Pressão arterial final (mmHg)','PA final'],['fcFinal','Frequência cardíaca final (bpm)','FC final',300],['spoFinal','SpO₂ final (%)','SpO₂ final',100],['painFinal','Dor final (0 a 10)','Dor final (0–10)',10]
+  ];
+  const evolutionFields=['general',...evolutionVitals.map(([key])=>key),'conduct','goal'];
+  const evolutionValues=r=>Object.fromEntries(evolutionFields.map(key=>[key,String(r[key]??'')]));
+  function evolutionContent(r){
+    const vitals=evolutionVitals.filter(([key])=>String(r[key]??'')!=='');
+    return `<p style="white-space:pre-wrap;font-size:14px;line-height:1.55">${esc(r.general||'')}</p>`+
+      (vitals.length||r.conduct||r.goal?`<details class="v5-complementary" style="margin-top:14px"><summary>Campos complementares</summary><div class="vitals">${vitals.map(([key,,label])=>`<span>${label}: ${esc(r[key])}</span>`).join('')}</div>${r.conduct?`<br><b>Condutas / procedimentos</b><p>${esc(r.conduct)}</p>`:''}${r.goal?`<br><b>Objetivos / orientações</b><p>${esc(r.goal)}</p>`:''}</details>`:'');
+  }
+  function evolutionCard(r){
+    const versions=Array.isArray(r.versions)?r.versions:[];
+    const dateTime=value=>new Date(value).toLocaleString('pt-BR');
+    return `<article class="record"><div class="eval-list-title"><h3>Evolução · ${fmt(r.date)}</h3>${tag(professional(r.pro))}</div>${evolutionContent(r)}<p class="record-meta" style="margin-top:14px">Registrado em ${dateTime(r.created)} · ${r.appointment?'Vinculado ao atendimento':'Registro avulso'}${r.updated?' · Última edição: '+dateTime(r.updated):''}</p>
+      <button type="button" class="btn secondary small" style="margin-top:10px" data-evolution-id="${esc(r.id)}" onclick="editEvolution(this.dataset.evolutionId)">Editar evolução</button>
+      ${versions.length?`<details class="v5-complementary" style="margin-top:12px"><summary>Histórico de edições (${versions.length})</summary>${versions.slice().reverse().map(v=>`<div class="record"><h4>Versão anterior à edição de ${dateTime(v.editedAt)}</h4>${evolutionContent(v.snapshot||{})}</div>`).join('')}</details>`:''}</article>`;
+  }
+  window.editEvolution=function(rid){
+    const current=()=>db.records.find(r=>r.id===rid&&r.type==='Evolução'&&r.patient===patientId&&db.patients.some(p=>p.id===r.patient));
+    const initial=current();if(!initial)return;
+    const patientRef=initial.patient,before=JSON.stringify(initial),values=evolutionValues(initial);let saving=false;
+    modal('Editar evolução',`<p><b>${esc(patient(patientRef).name)}</b> · ${fmt(initial.date)} · ${esc(professional(initial.pro))}</p><p class="note">O conteúdo anterior fica no histórico do prontuário.</p><div class="formgrid"><label class="wide v5-evolution-main">Evolução<textarea name="general" required>${esc(values.general)}</textarea></label><details class="v5-complementary"><summary>Campos complementares</summary><div class="formgrid">${evolutionVitals.map(([key,label,,max])=>field(key,label,values[key],max===undefined?'text':'number',max===undefined?'':`min="0" max="${max}"`)).join('')}${area('conduct','Condutas / procedimentos',values.conduct)}${area('goal','Objetivos, orientações e observações complementares',values.goal)}</div></details></div><p id="evolution-edit-status" role="status" aria-live="polite"></p>`,async data=>{
+      if(saving)return;
+      const form=document.getElementById('form'),message=form.querySelector('#evolution-edit-status');
+      if(window.OlhanCloud?.status().blocked){message.textContent='Há alterações sem confirmação. Confira o aviso de salvamento.';return}
+      const r=current();if(!r||r.patient!==patientRef||JSON.stringify(r)!==before){message.textContent='O registro mudou. Reabra a evolução para conferir.';return}
+      const fields=evolutionValues(data);
+      if(!fields.general.trim()){message.textContent='Preencha o texto da evolução.';return}
+      for(const [key,label,,max] of evolutionVitals)if(max!==undefined&&fields[key]!==''&&(!/^\d+$/.test(fields[key])||Number(fields[key])>max)){message.textContent='Confira o campo: '+label+'.';return}
+      const edited=Object.fromEntries(evolutionFields.filter(k=>fields[k]!==values[k]).map(k=>[k,fields[k]]));
+      if(!Object.keys(edited).length){closeModal();return}
+      const controls=[...form.querySelectorAll('input,textarea,button')];saving=true;controls.forEach(c=>c.disabled=true);message.textContent='Salvando evolução…';
+      try{
+        const editedAt=new Date().toISOString(),revision={...r,...edited,updated:editedAt,versions:[...(Array.isArray(r.versions)?r.versions:[]),{editedAt,snapshot:values}]};
+        const i=db.records.indexOf(r);db.records[i]=revision;
+        if(!save()){
+          if(db.records[i]===revision)db.records[i]=r;
+          throw Error('A evolução não foi salva. Confira o aviso do sistema.');
+        }
+        if(window.OlhanCloud)await OlhanCloud.flush();
+        if(document.getElementById('form')===form)closeModal();
+        render();toast('Evolução atualizada.');
+      }catch(e){message.textContent=e.message||'Não foi possível confirmar a edição.'}
+      finally{saving=false;controls.forEach(c=>c.disabled=false)}
+    },'Salvar alterações');
+  };
+
   evaluationCard=function(r){
     const edits=(r.versions||[]).length;
     return `<article class="record"><div class="eval-list-title"><div><h3>${esc(patient(r.patient).name)} · ${fmt(r.date)}</h3><p>${esc(professional(r.pro))}${r.assessment?' · Ficha completa':' · Registro da versão anterior'}</p>${edits?`<span class="version-badge">${edits} versão${edits>1?'ões':' anterior'}</span>`:''}</div>${tag(r.draft?'Rascunho':'Concluída')}</div><p>${esc(r.assessment?.complaint||r.general||'Preenchimento em andamento.')}</p><div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap">${btn(r.draft?'Continuar avaliação':'Ver ficha',`openEvaluation('${r.id}')`,'file',r.draft?'soft':'secondary small')}${!r.draft?btn('Editar',`editEvaluation('${r.id}')`,'settings','secondary small'):''}</div></article>`;
@@ -552,7 +600,7 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
     let p=patient(patientId),rs=db.records.filter(r=>r.patient===patientId&&r.type===(patientTab==='Avaliações'?'Avaliação':'Evolução')).sort((a,b)=>b.created.localeCompare(a.created));
     return `<button class="textbtn" style="margin-bottom:20px" onclick="patientId=null;render()">← Todos os pacientes</button>`+head(esc(p.name),'Prontuário individual',patientTab==='Avaliações'?btn('Nova avaliação',`startEvaluation('${p.id}')`):btn('Novo registro',`recordForm('${p.id}')`,'plus'))+
     `<div class="card" style="padding:22px;margin-bottom:22px"><div class="detailbanner"><span class="avatar">${esc(initials(p.name))}</span><div><h3>${esc(p.name)}</h3><p>${p.birth?new Date(p.birth+'T12:00:00').toLocaleDateString('pt-BR'):''} · ${esc(p.frequency||'')}</p></div><span class="patient-status ${String(p.status||'Ativo').toLowerCase()}">${esc(p.status||'Ativo')}</span><button class="textbtn" style="margin-left:auto" onclick="patientForm('${p.id}')">Editar cadastro</button></div><div class="formgrid"><p>Responsável: <b>${esc(p.responsible||'Não informado')}</b><br>Contato: ${esc(p.phone||'Não informado')}<br>CPF: ${esc(p.cpf||'Não informado')}</p><p>${esc(p.address||'Endereço não informado')}<br>${esc(professional(p.pro))} · ${money(p.price)} / sessão</p></div>${treatmentOverview(p)}</div>`+
-    `<div class="toolbar"><div class="segments">${['Evoluções','Avaliações','Anexos','Histórico'].map(t=>`<button class="${patientTab===t?'selected':''}" onclick="patientTab='${t}';render()">${t}</button>`).join('')}</div>${btn('Imprimir','window.print()','download','secondary small')}</div><section class="card">${patientTab==='Anexos'?filePanel(p):patientTab==='Histórico'?db.appointments.filter(a=>a.patient===p.id).sort((a,b)=>b.date.localeCompare(a.date)).map(a=>`<div class="record"><h3>${fmt(a.date)} · ${a.time} ${tag(a.status)}</h3><p>${esc(a.service)} · ${money(a.price)}</p>${(a.history||[]).map(h=>`<p>${esc(h)}</p>`).join('')}</div>`).join('')||'<div class="empty">Sem atendimentos.</div>':patientTab==='Avaliações'?(rs.length?rs.map(evaluationCard).join(''):'<div class="empty">Nenhuma avaliação. Use “Nova avaliação”.</div>'):rs.length?rs.map(r=>`<article class="record"><div style="display:flex;justify-content:space-between;gap:10px"><h3>Evolução · ${fmt(r.date)}</h3>${tag(professional(r.pro))}</div><p style="white-space:pre-wrap;font-size:14px;line-height:1.55">${esc(r.general||'')}</p>${[r.pa,r.fc,r.spo,r.pain,r.conduct,r.goal].some(Boolean)?`<details class="v5-complementary" style="margin-top:14px"><summary>Campos complementares</summary><div class="vitals">${[['PA',r.pa],['FC',r.fc],['SpO₂',r.spo],['Dor (0–10)',r.pain]].filter(x=>x[1]).map(x=>`<span>${x[0]}: ${esc(x[1])}</span>`).join('')}</div>${r.conduct?`<br><b>Condutas / procedimentos</b><p>${esc(r.conduct)}</p>`:''}${r.goal?`<br><b>Objetivos / orientações</b><p>${esc(r.goal)}</p>`:''}</details>`:''}<p style="font-size:10px;margin-top:18px">Registrado em ${new Date(r.created).toLocaleString('pt-BR')} · ${r.appointment?'Vinculado ao atendimento':'Registro avulso'}</p></article>`).join(''):'<div class="empty">Nenhuma evolução registrada.</div>'}</section>`;
+    `<div class="toolbar"><div class="segments">${['Evoluções','Avaliações','Anexos','Histórico'].map(t=>`<button class="${patientTab===t?'selected':''}" onclick="patientTab='${t}';render()">${t}</button>`).join('')}</div>${btn('Imprimir','window.print()','download','secondary small')}</div><section class="card">${patientTab==='Anexos'?filePanel(p):patientTab==='Histórico'?db.appointments.filter(a=>a.patient===p.id).sort((a,b)=>b.date.localeCompare(a.date)).map(a=>`<div class="record"><h3>${fmt(a.date)} · ${a.time} ${tag(a.status)}</h3><p>${esc(a.service)} · ${money(a.price)}</p>${(a.history||[]).map(h=>`<p>${esc(h)}</p>`).join('')}</div>`).join('')||'<div class="empty">Sem atendimentos.</div>':patientTab==='Avaliações'?(rs.length?rs.map(evaluationCard).join(''):'<div class="empty">Nenhuma avaliação. Use “Nova avaliação”.</div>'):rs.length?rs.map(evolutionCard).join(''):'<div class="empty">Nenhuma evolução registrada.</div>'}</section>`;
   };
 
   function monthInitialEvaluations(){const ym=today.slice(0,7);return evaluationRecords().filter(r=>!r.draft&&r.evaluationKind==='Inicial'&&String(r.date||'').startsWith(ym))}
