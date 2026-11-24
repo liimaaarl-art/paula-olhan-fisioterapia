@@ -9,6 +9,7 @@
   const slot=a=>a.recurrenceSlot||a.recurrenceOrigin?.slot||new Date(a.date+'T12:00:00Z').getUTCDay()+':'+a.time;
   const cancelled=a=>String(a.status||'').includes('Cancelado');
   const fingerprint=a=>JSON.stringify(a);
+  const sameStartForDifferentPatients=(a,b)=>Boolean(a.patient&&b.patient&&a.patient!==b.patient&&a.time===b.time);
   function prepare(data,aid,patch,scope='once',options={}){
     if(!['once','future'].includes(scope))throw Error('Escolha somente esta sessão ou as próximas.');
     const a=data.appointments.find(x=>x.id===aid);if(!a)throw Error('Atendimento não encontrado.');
@@ -47,10 +48,10 @@
     });
     const ids=new Set(targets.map(x=>x.id)),gap=Number(data.care?.preferences?.travelMinutes||0);
     const pool=[...data.appointments.filter(x=>!ids.has(x.id)),...changes.map(x=>x.after)];
-    for(const {after:x} of changes){if(cancelled(x))continue;const conflict=pool.find(y=>y.id!==x.id&&x.pro===y.pro&&x.date===y.date&&!cancelled(y)&&mins(x.time)<mins(y.time)+Number(y.duration)+gap&&mins(y.time)<mins(x.time)+Number(x.duration)+gap);if(conflict)throw Error('Conflito de horário ou deslocamento em '+x.date+' às '+x.time+'. Nenhuma sessão foi alterada.');}
+    for(const {after:x} of changes){if(cancelled(x))continue;const conflict=pool.find(y=>y.id!==x.id&&x.pro===y.pro&&x.date===y.date&&!cancelled(y)&&!sameStartForDifferentPatients(x,y)&&mins(x.time)<mins(y.time)+Number(y.duration)+gap&&mins(y.time)<mins(x.time)+Number(x.duration)+gap);if(conflict)throw Error('Conflito de horário ou deslocamento em '+x.date+' às '+x.time+'. Nenhuma sessão foi alterada.');}
     return {aid,scope,changed,changes,eligible:eligible.length,skipped:following.length-eligible.length,replacement:!!options.replacement};
   }
-  window.OlhanSchedule={prepare,slot,day,clock,fingerprint};
+  window.OlhanSchedule={prepare,slot,day,clock,fingerprint,sameStartForDifferentPatients};
   if(typeof db==='undefined')return;
   let pending=null;
   function apply(plan){

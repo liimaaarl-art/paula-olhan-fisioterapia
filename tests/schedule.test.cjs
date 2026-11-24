@@ -19,3 +19,10 @@ test('assistente rejeita execução arbitrária, IDs inexistentes e valores inv�
 test('registros clínicos abrem formulário sem salvar ou concluir sessão',()=>{const {data,actions}=setup();data.appointments[0].date='2026-10-20';const p=actions.prepare(data,[action('evolution','create','',{patient:'p1',appointment:'a',general:'Relato ditado.'})],{today:'2026-10-21'});assert.equal(p.external[0].entity,'evolution');assert.equal(p.data.records.length,0);assert.equal(p.data.appointments[0].status,'Agendado')});
 test('assistente preserva limites de demonstração e repasses vinculados',()=>{const {data,actions}=setup();assert.throws(()=>actions.prepare(data,[action('patient','create','',{name:'Pessoa',pro:'t1'})],{limits:{newPatients:0}}),/Limite/);data.cashEntries.push({id:'cash',appointmentIds:['a'],amount:10});assert.throws(()=>actions.prepare(data,[action('cash','update','cash',{amount:20})]),/repasses/)});
 test('assistente mantém operação atômica quando uma proposta contém erro',()=>{const {data,actions}=setup();const before=JSON.stringify(data);assert.throws(()=>actions.prepare(data,[action('patient','update','p1',{name:'Novo nome'}),action('cash','create','',{amount:-1})]));assert.equal(JSON.stringify(data),before)});
+test('reagendamento permite mesmo início para outro paciente, sem permitir sobreposição parcial',()=>{
+ const {data,api}=setup();data.appointments.push(ap('other','2026-11-09','10:00',{patient:'p2',seriesId:null}));
+ const plan=api.prepare(data,'a',{time:'10:00'},'future');assert.ok(plan.changes.every(c=>c.after.time==='10:00'));
+ assert.throws(()=>api.prepare(data,'a',{time:'10:30'},'future'),/Conflito/);
+ data.appointments.at(-1).patient='p1';
+ assert.throws(()=>api.prepare(data,'a',{time:'10:00'},'future'),/Conflito/);
+});
