@@ -338,3 +338,20 @@ test('editar evolução aguarda o servidor e mantém o formulário aberto se hou
  reply({ok:false,status:409,json:async()=>({error:'Conflito simulado'})});await assert.rejects(w.OlhanCloud.flush(),/sem confirmação/);await tick();
  assert.equal(w.document.getElementById('modal').open,true);assert.equal(form.elements.general.value,'Correção pendente');assert.match(form.querySelector('#evolution-edit-status').textContent,/sem confirmação/);submitForm(w,form);assert.equal(requests.length,1);w.close();
 });
+
+test('agenda salva pacientes diferentes no mesmo horário e mantém os dois visíveis',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;
+ w.eval("db.appointments=[{id:'original-slot',patient:'p1',pro:'pB',date:today,time:'10:00',duration:60,price:160,status:'Agendado',service:'Fisioterapia domiciliar'}]");
+ w.appointmentForm(undefined,{patient:'p2',pro:'pB',time:'10:00'});submitForm(w,w.document.getElementById('form'));
+ const saved=JSON.parse(w.localStorage.getItem('olhan-v1')).appointments;
+ assert.deepEqual(saved.map(a=>[a.patient,a.time,a.pro]),[['p1','10:00','pB'],['p2','10:00','pB']]);
+ w.go('agenda');w.setAgendaLayout('time');assert.ok(w.document.querySelector('[data-appointment-id="original-slot"]'));assert.equal(w.document.querySelectorAll('.timed-event').length,2);
+ w.appointmentForm(undefined,{patient:'p2',pro:'pB',time:'10:00'});submitForm(w,w.document.getElementById('form'));
+ assert.match(w.document.getElementById('toast').textContent,/Conflito/);assert.equal(w.eval('db.appointments.length'),2);w.close();
+});
+test('agendamento recorrente mantém horário compartilhado com outro paciente',async()=>{
+ const dom=await financeScheduleApp(),w=dom.window;
+ w.eval("db.appointments.push({id:'shared-biweekly',patient:'p1',pro:'pB',date:'2026-12-21',time:'10:00',duration:60,status:'Agendado'})");
+ submitForm(w,recurringForm(w));const overlap=w.eval("db.appointments.filter(a=>a.date==='2026-12-21'&&a.time==='10:00'&&a.pro==='pB').map(a=>a.patient)");
+ assert.deepEqual(Array.from(overlap),['p1','p2']);w.close();
+});

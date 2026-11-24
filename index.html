@@ -312,9 +312,9 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
     });
   };
 
-  function appointmentConflict(pro,date,time,duration,ignoreId){
+  function appointmentConflict(pro,date,time,duration,ignoreId,patientId){
     const start=timeMinutes(time),end=start+Number(duration);
-    return db.appointments.find(x=>x.id!==ignoreId&&x.pro===pro&&x.date===date&&!String(x.status).includes('Cancelado')&&start<timeMinutes(x.time)+Number(x.duration)+Number(db.care?.preferences?.travelMinutes||0)&&timeMinutes(x.time)<end+Number(db.care?.preferences?.travelMinutes||0));
+    return db.appointments.find(x=>x.id!==ignoreId&&x.pro===pro&&x.date===date&&!String(x.status).includes('Cancelado')&&!window.OlhanSchedule?.sameStartForDifferentPatients({patient:patientId,time},x)&&start<timeMinutes(x.time)+Number(x.duration)+Number(db.care?.preferences?.travelMinutes||0)&&timeMinutes(x.time)<end+Number(db.care?.preferences?.travelMinutes||0));
   }
   function generatedConflict(items){
     const key={};
@@ -365,7 +365,7 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
       modal('Detalhes do atendimento',`${locked?'<p class="note">Atendimento já incluído em um fechamento. Valores e status estão bloqueados.</p>':''}<div class="formgrid">${select('patient','Paciente',db.patients.map(p=>[p.id,p.name]),a.patient)}${select('pro','Profissional',db.team.map(p=>[p.id,p.name]),a.pro||db.patients[0].pro)}${field('date','Data',a.date||selectedDate,'date','required')}${field('time','Horário',a.time||'08:00','time','required')}${field('duration','Duração (minutos)',a.duration||60,'number','min="15" max="480" required')}${field('price','Valor da sessão (R$)',a.price??patient(a.patient).price,'number','min="0" step="0.01" required')}${select('service','Serviço',['Fisioterapia domiciliar','Avaliação inicial'],a.service)}${select('status','Status',['Agendado','Realizado','Remarcado','Cancelado sem cobrança','Cancelado com cobrança'],a.status||'Agendado')}${area('notes','Observações do atendimento',a.notes)}</div>${a.seriesId?'<div class="v5-series-note">Este atendimento faz parte de uma recorrência. Alterar aqui modifica somente esta sessão.</div>':''}${!a.status.includes('Cancelado')?`<div style="margin-top:18px">${btn(a.service==='Avaliação inicial'?'Registrar avaliação':'Registrar evolução',`recordForm('${a.patient}','${a.id}')`,'file','secondary')}</div>`:''}`,locked?null:data=>{
         const current=db.appointments.find(x=>x.id===aid);if(!current)return;
         if(db.records.some(r=>r.appointment===aid&&!r.draft)&&(data.patient!==current.patient||data.pro!==current.pro||data.date!==current.date||data.time!==current.time||data.status!=='Realizado'))return toast('Este atendimento possui registro clínico. Preserve paciente, profissional, data, horário e status realizado.');
-        if(!data.status.includes('Cancelado')&&appointmentConflict(data.pro,data.date,data.time,Number(data.duration),aid))return toast('Há conflito de horário ou do intervalo de deslocamento para este profissional.');
+        if(!data.status.includes('Cancelado')&&appointmentConflict(data.pro,data.date,data.time,Number(data.duration),aid,data.patient))return toast('Há conflito de horário ou do intervalo de deslocamento para este profissional.');
         if(timeMinutes(data.time)+Number(data.duration)>1440)return toast('O atendimento deve terminar no mesmo dia.');
         current.history=current.history||[];current.history.push(`${new Date().toLocaleString('pt-BR')}: ${current.date} ${current.time} (${current.status}) → ${data.date} ${data.time} (${data.status})`);
         Object.assign(current,data,{price:Number(data.price),duration:Number(data.duration)});commit('Atendimento atualizado.');
@@ -401,7 +401,7 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
       if(!items.length)return toast('Nenhuma sessão foi gerada com os dias escolhidos.');
       if(items.length>400)return toast('A recorrência gerou sessões demais. Reduza o período.');
       if(generatedConflict(items))return toast('Há choque de horários dentro da própria recorrência.');
-      for(const it of items){if(appointmentConflict(it.pro,it.date,it.time,it.duration))return toast(`Conflito de horário ou deslocamento em ${fmt(it.date)} às ${it.time}. Ajuste os horários.`)}
+      for(const it of items){if(appointmentConflict(it.pro,it.date,it.time,it.duration,null,it.patient))return toast(`Conflito de horário ou deslocamento em ${fmt(it.date)} às ${it.time}. Ajuste os horários.`)}
       const seriesId=items.length>1?id():null;
       items.forEach(it=>db.appointments.push({...it,id:id(),seriesId,recurrenceSlot:new Date(it.date+'T12:00:00Z').getUTCDay()+':'+it.time}));
       const p=patient(data.patient);if(items.length>1)p.frequency=intervalWeeks===2?'Quinzenal':(data.weeklyFrequency||'1')+'x por semana';
@@ -421,7 +421,7 @@ const originalHtml=document.documentElement.outerHTML;function downloadHtml(){do
   window.dropAppointment=function(date,time,ev){
     ev?.preventDefault();const aid=draggedAppointmentId||ev?.dataTransfer?.getData('text/plain');draggedAppointmentId=null;const a=db.appointments.find(x=>x.id===aid);if(!a)return;
     if(billed(a)||db.records.some(r=>r.appointment===aid&&!r.draft))return toast('Atendimento fechado ou com registro clínico não pode ser movido.');
-    if(appointmentConflict(a.pro,date,time,a.duration,a.id))return toast('Há conflito de horário ou do intervalo de deslocamento para este profissional.');
+    if(appointmentConflict(a.pro,date,time,a.duration,a.id,a.patient))return toast('Há conflito de horário ou do intervalo de deslocamento para este profissional.');
     if(timeMinutes(time)+Number(a.duration)>1440)return toast('O atendimento deve terminar no mesmo dia.');
     a.history=a.history||[];a.history.push(`${new Date().toLocaleString('pt-BR')}: movido por arrastar de ${a.date} ${a.time} para ${date} ${time}`);a.date=date;a.time=time;a.status=a.status==='Agendado'?'Remarcado':a.status;save();render();toast('Atendimento movido na agenda.');
   };
