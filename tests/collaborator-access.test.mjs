@@ -9,3 +9,30 @@ test('somente funções clínicas autorizadas alteram o estado',()=>{assert.thro
 test('não aceita datas impossíveis em novos atendimentos',()=>{assert.throws(()=>applyCollaboratorAction(base(),'tanaka.ana91@gmail.com','appointment.create',{patient:'p1',date:'2026-02-31',time:'09:00'},()=> 'a3'))});
 test('reagendamento altera data e horário somente de atendimento autorizado',()=>{const s=base(),e='tanaka.ana91@gmail.com',p={id:'a1',date:'2026-11-12',time:'14:30',status:'Remarcado',notes:'Reagendado'},run=(state,payload)=>applyCollaboratorAction(state,e,'appointment.update',payload,()=> 'x');const out=run(s,p);assert.equal(out.appointments[0].date,p.date);assert.equal(out.appointments[0].time,p.time);assert.equal(s.data.appointments[0].time,'09:00');assert.throws(()=>run(s,{...p,id:'a2'}));assert.throws(()=>run(s,{...p,date:'2026-02-31'}));assert.throws(()=>run(s,{...p,time:'25:00'}));s.data.records.push({id:'r2',appointment:'a1'});assert.throws(()=>run(s,p));assert.throws(()=>applyCollaboratorAction(base(),e,'patient.create',{name:'X'},()=> 'x'))});
 test('pode reagendar atendimento de paciente atribuído mesmo que cadastrado por outra profissional',()=>{const s=base();s.data.appointments[0].pro='paula';const out=applyCollaboratorAction(s,'tanaka.ana91@gmail.com','appointment.update',{id:'a1',date:'2026-11-12',time:'10:30',status:'Remarcado'},()=> 'x');assert.equal(out.appointments[0].time,'10:30');assert.equal(out.appointments[0].pro,'paula')});
+test('registro da agenda usa a data real, mantém autoria e conclui apenas o atendimento vinculado',()=>{
+ const s=base(),email='tanaka.ana91@gmail.com';s.data.appointments[0].status='Agendado';
+ const body={patient:'p1',appointment:'a1',date:'2026-11-06',type:'Evolução',general:'Relato',fc:'78',pain:'0',paFinal:'120/80',pro:'paula'};
+ const next=applyCollaboratorAction(s,email,'record.create',body,()=> 'clinical-new'),r=next.records.at(-1);
+ assert.equal(r.date,'2026-11-10');assert.equal(r.pro,'ana');assert.equal(r.pain,'0');assert.equal(r.paFinal,'120/80');
+ assert.equal(next.appointments[0].status,'Realizado');assert.equal(s.data.appointments[0].status,'Agendado');
+ assert.throws(()=>applyCollaboratorAction({data:next},email,'record.create',body,()=> 'duplicate'),/já tem/);
+ assert.throws(()=>applyCollaboratorAction(s,email,'record.create',{...body,fc:'301'},()=> 'invalid'),/Frequência/);
+});
+test('avaliação completa usa dados estruturados e edição não troca paciente, data ou autoria',()=>{
+ const s=base(),email='tanaka.ana91@gmail.com',mk=()=> 'evaluation-full';
+ const payload={patient:'p1',date:'2026-11-10',type:'Avaliação',assessment:{complaint:'Queixa',objective:'Objetivo',pain:'0',conditions:['Diabetes'],painPoints:['Frente: Tórax'],privateExtra:'discard'}};
+ const draft=applyCollaboratorAction(s,email,'record.create',{...payload,draft:true},mk);
+ assert.equal(draft.records.at(-1).draft,true);
+ const complete=applyCollaboratorAction({data:draft},email,'record.update',{id:mk(),...payload,patient:'p2',date:'2026-11-13'},mk);
+ let saved=complete.records.at(-1);assert.equal(saved.patient,'p1');assert.equal(saved.date,'2026-11-10');assert.equal(saved.draft,false);assert.equal(saved.general,'Queixa');assert.equal(saved.assessment.privateExtra,undefined);assert.deepEqual(saved.assessment.conditions,['Diabetes']);
+ const revised=applyCollaboratorAction({data:complete},email,'record.update',{id:mk(),assessment:{...payload.assessment,complaint:'Corrigida'}},mk);
+ saved=revised.records.at(-1);assert.equal(saved.general,'Corrigida');assert.equal(saved.versions[0].snapshot.general,'Queixa');
+ s.data.records[0].pro='paula';assert.throws(()=>applyCollaboratorAction(s,email,'record.update',{id:'r1',general:'Não autorizado'},mk),/não autorizado/);
+});
+test('anexo da colaboradora só é registrado para paciente atribuído e pasta válida',()=>{
+ const s=base(),e='tanaka.ana91@gmail.com',body={patient:'p1',folder:'Documentos',file:{id:'file-new',data:'/api/files?id=file-new',name:'Relatório.pdf',type:'application/pdf'}};
+ const next=applyCollaboratorAction(s,e,'file.register',body,()=> 'x');
+ assert.equal(next.files.at(-1).folder,'Documentos');
+ assert.throws(()=>applyCollaboratorAction(s,e,'file.register',{...body,patient:'p2'},()=> 'x'));
+ assert.throws(()=>applyCollaboratorAction(s,e,'file.register',{...body,folder:'Outra'},()=> 'x'));
+});
