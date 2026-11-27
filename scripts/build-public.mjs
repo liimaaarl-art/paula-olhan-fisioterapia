@@ -20,6 +20,7 @@ if (process.env.VERCEL_ENV === 'production' && process.env.BETTER_AUTH_URL) {
 
 
 for(const file of ['paciente.html','patient-portal.js','patient-portal.css','staff-patient-access.js']) await copyFile('portal/'+file,'public/'+file);
+await copyFile('website/assets/logo-olhan.png','public/olhan-logo.png');
 await copyFile('website/assets/logo-olhan-transparente.png','public/patient-logo.png');
 await mkdir('public/patient-fonts',{recursive:true});
 for(const file of ['BodoniModa.woff','Manrope.woff','Garet-Book.woff'])await copyFile('website/assets/fonts/'+file,'public/patient-fonts/'+file);

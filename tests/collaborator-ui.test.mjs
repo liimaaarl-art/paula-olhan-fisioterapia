@@ -15,7 +15,7 @@ const fixture=()=>({revision:4,data:{
 }});
 async function until(fn){for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,5))}assert.fail('Interface não chegou ao estado esperado.')}
 async function app(options={}){
- let db=fixture(),count=0;const requests=[],errors=[];
+ let db=fixture(),count=0;options.prepare?.(db.data);const requests=[],errors=[];
  const console=new VirtualConsole();console.on('jsdomError',e=>errors.push(e));
  const scripts=[];
  const html=read('collaborator.html').replace(/<script defer src="\/([^"]+)"><\/script>/g,(_,f)=>{scripts.push('<script>'+read(f)+'</script>');return ''}).replace('</body>',scripts.join('')+'</body>');
@@ -65,5 +65,22 @@ test('aba Anexos envia PDF privado à pasta escolhida no prontuário, sem cadast
   Object.defineProperty(input,'files',{value:[file]});input.dispatchEvent(new w.Event('change'));
   await until(()=>$('#main a[download]')?.textContent==='Relatório.pdf');
   assert.equal(requests.find(x=>x.url==='/api/files').body.patient,'p1');assert.equal(db().data.files[0].folder,'Documentos');
+ }finally{w.close()}
+});
+
+test('início e menu lateral usam apenas aniversariantes atribuídos do mês inteiro',async()=>{
+ const {w,$}=await app({prepare:data=>{
+  data.patients.forEach((p,i)=>p.birth=['1988-11-29','1991-11-06','1975-11-02'][i]);
+  data.patients.push({id:'fora',pro:'ana',name:'Outro mês',birth:'1980-12-01'});
+ }});try{
+  const names=()=>Array.from(w.document.querySelectorAll('.birthday-row strong'),n=>n.textContent);
+  assert.deepEqual(names(),['Segundo paciente','Pessoa atribuída']);
+  assert.doesNotMatch($('#main').textContent,/Novo paciente|Fechamento/);
+  const drawer=$('#mobile-menu');
+  if(!drawer.showModal)drawer.showModal=function(){this.open=true;};
+  if(!drawer.close)drawer.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
+  $('#menu-open').click();assert.equal(drawer.open,true);
+  $('#drawer-slot [data-page="aniversarios"]').click();
+  assert.equal(drawer.open,false);assert.equal($('#main h1').textContent,'Aniversários');assert.deepEqual(names(),['Segundo paciente','Pessoa atribuída']);
  }finally{w.close()}
 });
