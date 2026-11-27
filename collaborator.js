@@ -6,10 +6,39 @@ async function mutate(action,payload){
  try{await load();toast('Alterações salvas.')}catch{toast('Salvo. Atualize a página para conferir.');}
  return true;
 }
-const navItems=[['inicio','Início'],['pendencias','Pendências'],['agenda','Agenda'],['pacientes','Pacientes'],['prontuarios','Prontuários e avaliações'],['arquivos','Fotos, vídeos e documentos'],['relatorios','Relatórios'],['aniversarios','Aniversários'],['exercicios','Exercícios'],['assistente','Assistente Olhan'],['contrato','Contrato de colaboradora']];function shell(){ $('#nav').innerHTML=navItems.map(([k,n])=>`<button data-page="${k}" class="${page===k?'active':''}">${n}</button>`).join('');$('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{page=b.dataset.page;render()}) }
+const navItems=[['inicio','Início'],['pendencias','Pendências'],['agenda','Agenda'],['pacientes','Pacientes'],['prontuarios','Prontuários e avaliações'],['arquivos','Fotos, vídeos e documentos'],['relatorios','Relatórios'],['aniversarios','Aniversários'],['exercicios','Exercícios'],['assistente','Assistente Olhan'],['contrato','Contrato de colaboradora']];
+const iconPaths={
+ inicio:'M3 10 12 3l9 7v11h-6v-7H9v7H3z',pendencias:'M12 3a9 9 0 1 0 .01 0 M12 7v5l3 2',
+ agenda:'M3 6h18v15H3z M7 3v6m10-6v6M3 11h18',pacientes:'M9 4a3 3 0 1 0 .01 0 M3 20v-2a6 6 0 0 1 12 0v2m1-15a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 5',
+ prontuarios:'M5 3h10l4 4v14H5z M14 3v5h5M8 12h8m-8 4h6',arquivos:'M2 6h8l2 3h10l-2 11H2z',
+ relatorios:'M4 3v18h17M8 17v-5m5 5V7m5 10v-7',aniversarios:'M3 8h18v5H3z M5 13v8h14v-8M12 8v13m0-13C4 9 5 1 9 3c2 1 3 5 3 5s1-4 3-5c4-2 5 6-3 5',
+ exercicios:'M4 7v10m4-13v16m0-8h8m0-8v16m4-13v10',assistente:'M3 4h18v13H9l-6 4z M7 9h10m-10 4h6',contrato:'M5 3h14v18H5z M8 7h8m-8 4h8m-8 5h4'
+};
+const icon=k=>`<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${iconPaths[k]}"/></svg>`;
+const drawer=$('#mobile-menu'),opener=$('#menu-open');
+opener.onclick=()=>{if(drawer.open)return;$('#drawer-slot').append($('#nav'));drawer.showModal();opener.setAttribute('aria-expanded','true');};
+$('#menu-close').onclick=()=>drawer.close();
+drawer.addEventListener('close',()=>{if(!drawer.open){$('#desktop-menu').append($('#nav'));opener.setAttribute('aria-expanded','false');}});
+drawer.addEventListener('click',e=>{if(e.target===drawer && e.clientX>=drawer.getBoundingClientRect().right)drawer.close();});
+window.matchMedia?.('(max-width:760px)').addEventListener('change',e=>{if(!e.matches&&drawer.open)drawer.close()});
+function shell(){
+ const nav=$('#nav');nav.innerHTML='<p class="nav-label">Espaço de cuidado</p>'+navItems.map(([k,n])=>`<button data-page="${k}" ${page===k?'class="active" aria-current="page"':''}><span class="nav-icon">${icon(k)}</span>${n}</button>`).join('');
+ nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{if(drawer.open)drawer.close();page=b.dataset.page;render();$('#main').focus()});
+}
 function patientOptions(){return patients().map(p=>`<option value="${esc(p.id)}" ${activePatient===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
 function title(h,sub=''){return `<div class="eyebrow">Minha área</div><h1>${h}</h1><p class="muted">${sub}</p>`}
-function home(){let upcoming=appointments().filter(a=>a.date>=today()&&a.status!=='Realizado').length,notes=records().length,files=(state.data.files||[]).length;return `${title('Olá, '+esc(state.user.name.split(' ')[0])+'.','Acompanhe sua agenda e os pacientes vinculados a você.') }<div class="cards"><section class="card"><div class="eyebrow">Pacientes atribuídos</div><div class="stat">${patients().length}</div><button data-go="pacientes" class="secondary">Abrir pacientes</button></section><section class="card"><div class="eyebrow">Próximos atendimentos</div><div class="stat">${upcoming}</div><button data-go="agenda" class="secondary">Ver agenda</button></section><section class="card"><div class="eyebrow">Registros clínicos</div><div class="stat">${notes}</div><button data-go="prontuarios" class="secondary">Ver prontuários</button></section><section class="card"><div class="eyebrow">Arquivos clínicos</div><div class="stat">${files}</div><button data-go="arquivos" class="secondary">Ver arquivos</button></section></div><section class="card"><h2>Próximos atendimentos</h2>${listAppointments(appointments().filter(a=>a.date>=today()).slice(0,5))}</section>`}
+function home(){
+ const first=esc(state.user.name.trim().split(/\s+/)[0]),day=today();
+ const visits=appointments().filter(a=>a.date>=day&&a.status!=='Realizado'&&!cancelled(a)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+ const shortcuts=[['agenda','Agenda','Confira seus horários'],['pacientes','Meus pacientes','Veja quem está sob seus cuidados'],['prontuarios','Prontuários','Registre cada evolução'],['pendencias','Pendências','Acompanhe o que falta']];
+ const stats=[['pacientes','Pacientes atribuídos',patients().length],['agenda','Próximos atendimentos',visits.length],['prontuarios','Registros clínicos',records().length],['arquivos','Arquivos clínicos',(state.data.files||[]).length]];
+ return `<div class="home-heading"><div><h1>Cuidar começa por aqui.</h1><p class="muted">Seu dia organizado, mais tempo para as pessoas.</p></div><button id="new-appt">＋ Novo agendamento</button></div>
+ <section class="welcome"><div class="eyebrow">Olhan · Cuidado que acolhe</div><h2>Boas-vindas, ${first}.</h2><p>Acompanhe seus atendimentos e o que precisa da sua atenção hoje.</p></section>
+ <div class="shortcuts">${shortcuts.map(([k,n,sub])=>`<button data-go="${k}"><span class="nav-icon">${icon(k)}</span><span><strong>${n}</strong><small>${sub}</small></span></button>`).join('')}</div>
+ ${birthdayCard()}
+ <div class="cards stats">${stats.map(([k,n,num])=>`<button class="card" data-go="${k}"><span>${n}</span><strong>${num}</strong></button>`).join('')}</div>
+ <section class="card"><h2>Próximos atendimentos</h2>${listAppointments(visits.slice(0,5))}</section>`;
+}
 const {assessmentSections,painRegions,evolutionVitals}=OlhanClinicalFields;
 const teamId=()=>state.data.team[0]?.id;
 const shifted=(d,n)=>new Date(Date.parse(d+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
@@ -77,7 +106,15 @@ function filesPage(){
 }
 function patientsPage(){return `${title('Pacientes','A lista mostra apenas os cadastros atribuídos a você.') }<div class="cards">${patients().map(p=>`<article class="card"><div class="eyebrow">Paciente</div><h2>${esc(p.name)}</h2><p class="muted">${esc(p.frequency||'')}${p.birth?' · '+fmt(p.birth):''}</p><p>${esc(p.responsible||'')}<br>${esc(p.phone||'')}</p><div class="actions"><button data-patient="${esc(p.id)}">Abrir prontuário</button><button class="secondary" data-files="${esc(p.id)}">Arquivos</button></div></article>`).join('')||'<div class="empty">Ainda não há pacientes atribuídos a você.</div>'}</div>`}
 function reports(){return `${title('Relatórios e evoluções','Escolha paciente e registro para consultar o relatório clínico.') }<div class="filters"><select id="patient-select"><option value="">Selecione paciente</option>${patientOptions()}</select><select id="record-select"><option value="">Selecione atendimento / data</option>${records().filter(r=>!activePatient||r.patient===activePatient).map(r=>`<option value="${esc(r.id)}">${esc(patientName(r.patient))} · ${fmt(r.date)} · ${esc(r.type)}</option>`).join('')}</select></div><section class="card" id="report-result"><div class="empty">Selecione o paciente e depois um atendimento para abrir o relatório.</div></section>`}
-function birthdays(){const now=new Date();let rows=patients().filter(p=>p.birth).sort((a,b)=>{const days=p=>{const d=new Date(p.birth+'T12:00:00');return (new Date(now.getFullYear(),d.getMonth(),d.getDate())-new Date(now.getFullYear(),now.getMonth(),now.getDate()))/(86400000)};return days(a)-days(b)});return `${title('Aniversários','Datas dos pacientes sob seus cuidados.') }<section class="card">${rows.map(p=>`<div class="row"><strong>${esc(p.name)}</strong><span>${fmt(p.birth)}</span></div>`).join('')||'<div class="empty">Nenhuma data cadastrada.</div>'}</section>`}
+function birthdayCard(){
+ const [year,month]=today().split('-'),rows=patients().filter(p=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(p.birth)||p.birth.slice(5,7)!==month)return false;
+  const d=new Date(p.birth+'T12:00:00Z');return !isNaN(d)&&d.toISOString().slice(0,10)===p.birth;
+ }).sort((a,b)=>a.birth.slice(8).localeCompare(b.birth.slice(8))||a.name.localeCompare(b.name,'pt-BR'));
+ return `<section class="birthday-card card"><header><div><h2>Celebrar também é cuidar</h2><p>Aniversariantes do mês</p></div>${icon('aniversarios')}</header>${rows.map(p=>`<div class="birthday-row"><span class="nav-icon">${icon('aniversarios')}</span><div><strong>${esc(p.name)}</strong><small>${p.birth.slice(8)}/${month} · ${Number(year)-Number(p.birth.slice(0,4))} anos</small></div></div>`).join('')||'<p class="birthday-empty">Nenhum dos seus pacientes faz aniversário neste mês.</p>'}</section>`;
+}
+function birthdays(){return title('Aniversários','Pacientes sob seus cuidados que fazem aniversário neste mês.')+birthdayCard()}
+
 function exercises(){let lib=care().exercises||[],as=care().assignments||[];return `${title('Exercícios','Biblioteca e exercícios vinculados aos pacientes atribuídos a você.') }<div class="toolbar"><button id="new-exercise">Cadastrar exercício</button><button class="secondary" id="assign-exercise">Vincular a paciente</button></div><div class="cards">${lib.map(e=>`<article class="card"><div class="eyebrow">${esc(e.category||'Exercício')}</div><h2>${esc(e.title)}</h2><p>${esc(e.instructions||'')}</p>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">Abrir vídeo / material</a>`:''}<div class="sub">Vínculos ativos: ${as.filter(a=>a.exercise===e.id&&a.active!==false).length}</div></article>`).join('')||'<div class="empty">Nenhum exercício cadastrado.</div>'}</div>`}
 function pendencias(){let list=appointments().filter(a=>a.status==='Remarcado'||(a.status==='Agendado'&&a.date<today()));return `${title('Pendências','Itens da agenda dos seus pacientes que merecem acompanhamento.') }<section class="card">${listAppointments(list)}</section>`}
 function contract(){const cs=state.data.contracts||[];return `${title('Contrato de colaboradora','Acesso limitado ao seu contrato de prestação de serviço / colaboração.') }<section class="card">${cs.map(c=>`<article class="record"><h2>${esc(c.title||'Contrato de colaboradora')}</h2><p>${esc(c.status||'Rascunho')}</p><p>${esc(c.body||c.content||'')}</p></article>`).join('')||'<div class="empty">Seu contrato ainda não foi cadastrado pela administração.</div>'}</section>`}

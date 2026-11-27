@@ -6,3 +6,28 @@
 @media(max-width:600px){.week-controls{align-items:flex-start;gap:10px}.week-controls .actions{width:100%}.week-grid{min-width:1030px}.patient-summary{display:grid}.chart-tabs{gap:6px}.chart-tabs button{padding:8px 10px}.clinical-choices{display:grid;gap:7px}}
 @media(prefers-color-scheme:dark){.week-grid-wrap,.week-grid th,.clinical-section,.week-visit{background:var(--mint);color:var(--ink)}.week-grid .current-day{background:#294a43}}
 main{min-width:0} .record-text{line-height:1.6} .week-grid-wrap:focus-visible{outline:2px solid var(--green);outline-offset:3px} #evolution-helper textarea{min-height:90px} #evolution-helper .actions{margin-top:8px}
+
+/* Área da equipe */
+main h1{font:500 32px/1.2 Georgia,serif}main h2{font:500 26px/1.25 Georgia,serif}
+.brand img,.drawer-top img{width:128px;height:auto;display:block}.brand-group{flex-shrink:0}
+#menu-open{display:none}.layout aside{min-width:0}
+#nav{display:block;margin:0;background:#fffdf8}
+.nav-label{font-size:.66rem;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin:10px 10px 14px}
+#nav button,.shortcuts button,.birthday-row,.drawer-top{display:flex;align-items:center;gap:10px}
+#nav button{width:100%;white-space:normal;padding:8px;border-radius:12px}#nav button.active{background:var(--green);color:#fff}
+.nav-icon{display:inline-grid;place-items:center;width:34px;height:34px;flex:none;border-radius:10px;background:#e3ede5;color:var(--green)}
+svg[aria-hidden]{width:19px;height:19px;flex:none}#nav button.active .nav-icon{color:white;background:#ffffff21}
+#nav button:nth-of-type(3n) .nav-icon,.shortcuts button:nth-child(2n) .nav-icon,.birthday-row .nav-icon{background:#fae8d7;color:#805437}
+#mobile-menu{position:fixed;inset:0 auto 0 0;margin:0;padding:16px;width:min(84vw,325px);height:100dvh;max-height:100%;max-width:100%;border:0;background:#fffdf8;color:var(--ink);overflow-y:auto}#mobile-menu::backdrop{background:#173b3660}body:has(#mobile-menu[open]){overflow:hidden}
+.drawer-top{justify-content:space-between;margin-bottom:16px}.drawer-top button{background:transparent;color:var(--green);font-size:24px}
+#drawer-slot nav{position:static;height:auto;border:0;box-shadow:none;padding:0}
+.home-heading,.birthday-card header{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.home-heading{flex-wrap:wrap;margin-bottom:18px}.home-heading p,.welcome p,.birthday-card header p{margin:0}
+.home-heading button{background:#edaa7a;color:#412e22}
+.welcome{padding:clamp(22px,4vw,40px);background:linear-gradient(112deg,#305c56,#467e70);color:white;border-radius:18px}.welcome .eyebrow{color:#f3d6b8}.welcome h2{font-size:32px;margin:9px 0}.welcome p{max-width:54ch;color:#f3f6ee}
+.shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:16px 0}
+.shortcuts button,.stats button{background:#fffdf9;color:var(--ink);border:1px solid var(--line);text-align:left;white-space:normal}
+.shortcuts small,.birthday-row small,.stats strong{display:block}.shortcuts small,.birthday-row small{color:var(--muted);font-weight:400}.shortcuts button{padding:14px}
+.birthday-card{padding:0;overflow:hidden}.birthday-card header,.birthday-row,.birthday-empty{padding:16px 20px}.birthday-card header{background:#f3f5ec}.birthday-card header h2{font-size:23px;margin:0}.birthday-card header p{font-size:14px;color:var(--muted)}.birthday-row{border-top:1px solid var(--line)}.birthday-empty{margin:0;color:var(--muted)}
+.stats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.stats strong{font-size:23px}.stats .card{padding:14px}
+@media(max-width:760px){#desktop-menu{display:none}#menu-open{display:inline-grid;place-items:center;min-width:42px;min-height:42px;padding:6px;font-size:21px}.top{align-items:center;padding:10px 14px;gap:8px}.top .brand-group{gap:6px}.brand img{width:clamp(68px,21vw,100px)}.account{min-width:0}.account #person{flex-basis:100%;text-align:right;font-size:12px;overflow-wrap:anywhere}.account button{padding:6px 10px}.shortcuts button{padding:10px;gap:7px}.shortcuts small{font-size:11px}.shortcuts .nav-icon{width:28px;height:30px}}
